@@ -1,18 +1,22 @@
 import mongoose from 'mongoose';
 
 import User from '../models/User.model.js';
+import { getUserActivityHeatmap } from '../services/heatmap.service.js';
 import { ApiError, SuccessResponse } from '../utils/apiResponse.js';
 
 const { isValidObjectId } = mongoose;
 
 const getProfile = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id)
-      .select('-passwordHash')
-      .populate({
-        path: 'friends',
-        select: '_id username rating avatarUrl'
-      });
+    const [user, heatmap] = await Promise.all([
+      User.findById(req.user._id)
+        .select('-passwordHash')
+        .populate({
+          path: 'friends',
+          select: '_id username rating avatarUrl'
+        }),
+      getUserActivityHeatmap(req.user._id)
+    ]);
 
     if (!user) {
       throw new ApiError({
@@ -24,7 +28,8 @@ const getProfile = async (req, res, next) => {
     return new SuccessResponse({
       message: 'Profile fetched successfully.',
       data: {
-        user
+        user: user.toJSON(),
+        heatmap
       }
     }).send(res);
   } catch (error) {
@@ -89,7 +94,7 @@ const addFriend = async (req, res, next) => {
     return new SuccessResponse({
       message: 'Friend added successfully.',
       data: {
-        user,
+        user: user.toJSON(),
         friend
       }
     }).send(res);
