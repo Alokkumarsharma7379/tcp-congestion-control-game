@@ -4,6 +4,7 @@ import cors from 'cors';
 import authRouter from './routes/auth.routes.js';
 import userRouter from './routes/user.routes.js';
 import gameRouter from './routes/game.routes.js';
+import leaderboardRouter from './routes/leaderboard.routes.js';
 import {
   notFoundHandler,
   globalErrorHandler
@@ -40,6 +41,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRouter);
 app.use('/api/users', userRouter);
 app.use('/api/games', gameRouter);
+app.use('/api/leaderboard', leaderboardRouter);
 
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
