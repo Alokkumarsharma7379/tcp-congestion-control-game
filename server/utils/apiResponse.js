@@ -36,7 +36,7 @@ class ApiError extends Error {
     Error.captureStackTrace?.(this, this.constructor);
   }
 
-  toJSON({ exposeStack = false } = {}) {
+  toResponse({ exposeStack = false } = {}) {
     return {
       success: false,
       data: null,

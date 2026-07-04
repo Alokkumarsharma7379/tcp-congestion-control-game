@@ -1,79 +1,8 @@
 import { ApiError } from '../utils/apiResponse.js';
 
-const handleCastError = (error) => {
-  return new ApiError({
-    statusCode: 400,
-    message: 'Invalid resource identifier.',
-    error: {
-      field: error.path,
-      value: error.value
-    }
-  });
-};
-
-const handleValidationError = (error) => {
-  const fields = Object.values(error.errors).reduce((acc, fieldError) => {
-    acc[fieldError.path] = fieldError.message;
-    return acc;
-  }, {});
-
-  return new ApiError({
-    statusCode: 400,
-    message: 'Validation failed.',
-    error: fields
-  });
-};
-
-const handleDuplicateKeyError = (error) => {
-  const fields = Object.keys(error.keyValue || {});
-
-  return new ApiError({
-    statusCode: 409,
-    message: 'Duplicate value already exists.',
-    error: {
-      fields,
-      values: error.keyValue
-    }
-  });
-};
-
-const handleJwtExpiredError = () => {
-  return new ApiError({
-    statusCode: 401,
-    message: 'Session expired. Please sign in again.'
-  });
-};
-
-const handleJwtError = () => {
-  return new ApiError({
-    statusCode: 401,
-    message: 'Invalid authentication token.'
-  });
-};
-
 const normalizeError = (error) => {
   if (error instanceof ApiError) {
     return error;
-  }
-
-  if (error.name === 'CastError') {
-    return handleCastError(error);
-  }
-
-  if (error.name === 'ValidationError') {
-    return handleValidationError(error);
-  }
-
-  if (error.code === 11000) {
-    return handleDuplicateKeyError(error);
-  }
-
-  if (error.name === 'TokenExpiredError') {
-    return handleJwtExpiredError(error);
-  }
-
-  if (error.name === 'JsonWebTokenError') {
-    return handleJwtError(error);
   }
 
   return new ApiError({
@@ -103,7 +32,7 @@ const globalErrorHandler = (error, req, res, next) => {
 
   return res
     .status(normalizedError.statusCode)
-    .json(normalizedError.toJSON({ exposeStack }));
+    .json(normalizedError.toResponse({ exposeStack }));
 };
 
 export { notFoundHandler, globalErrorHandler };

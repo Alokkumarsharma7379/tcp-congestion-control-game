@@ -4,7 +4,7 @@ const connectDB = async () => {
   const mongoUri = process.env.MONGO_URI;
 
   if (!mongoUri) {
-    console.error('MONGO_URI is missing from environment variables.');
+    console.error('MONGO_URI is not configured.');
     process.exit(1);
   }
 
