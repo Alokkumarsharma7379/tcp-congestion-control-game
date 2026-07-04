@@ -37,6 +37,7 @@ app.get('/api/health', (req, res) => {
   }).send(res);
 });
 
+app.use('/uploads', express.static('uploads'));
 app.use('/api/auth', authRouter);
 app.use('/api/users', userRouter);
 app.use('/api/game', gameRouter);

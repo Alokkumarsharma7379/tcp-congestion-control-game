@@ -1,11 +1,15 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../context/AuthContext';
 import '../../styles/codeforces.css';
 
 function MainLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
+
   const { user, isAuthenticated, logout, booting } = useAuth();
+
+  const isGamePage = location.pathname.startsWith('/game');
 
   const handleLogout = () => {
     logout();
@@ -13,7 +17,7 @@ function MainLayout() {
   };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${isGamePage ? 'game-shell' : ''}`}>
       <header className="site-header">
         <div>
           <h1>TCP Congestion Control Platform</h1>
@@ -44,9 +48,11 @@ function MainLayout() {
 
       <Outlet />
 
-      <footer className="site-footer">
-        TCP Congestion Control Game · React + Express + MongoDB
-      </footer>
+      {!isGamePage && (
+        <footer className="site-footer">
+          TCP Congestion Control Game · React + Express + MongoDB
+        </footer>
+      )}
     </div>
   );
 }

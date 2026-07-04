@@ -11,4 +11,14 @@ const addFriend = (friendId) => {
   });
 };
 
-export { getProfile, addFriend };
+const uploadAvatar = (file) => {
+  const formData = new FormData();
+  formData.append('avatar', file);
+
+  return apiRequest('/users/avatar', {
+    method: 'POST',
+    body: formData
+  });
+};
+
+export { getProfile, addFriend, uploadAvatar };

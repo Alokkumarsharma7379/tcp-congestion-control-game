@@ -6,6 +6,40 @@ import { ApiError, SuccessResponse } from '../utils/apiResponse.js';
 
 const { isValidObjectId } = mongoose;
 
+const updateAvatar = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      throw new ApiError({
+        statusCode: 400,
+        message: 'Avatar image is required.'
+      });
+    }
+
+    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        avatarUrl,
+        lastVisit: new Date()
+      },
+      {
+        new: true,
+        runValidators: true
+      }
+    ).select('-passwordHash');
+
+    return new SuccessResponse({
+      message: 'Profile picture updated successfully.',
+      data: {
+        user: user.toJSON()
+      }
+    }).send(res);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getProfile = async (req, res, next) => {
   try {
     const [user, heatmap] = await Promise.all([
@@ -103,4 +137,4 @@ const addFriend = async (req, res, next) => {
   }
 };
 
-export { getProfile, addFriend };
+export { getProfile, addFriend, updateAvatar };

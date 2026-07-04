@@ -1,14 +1,18 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const getStoredToken = () => {
   return localStorage.getItem('token');
 };
 
-const buildHeaders = (headers = {}, auth = true) => {
+const isFormDataBody = (body) => {
+  return typeof FormData !== 'undefined' && body instanceof FormData;
+};
+
+const buildHeaders = ({ headers = {}, auth = true, isFormData = false }) => {
   const token = getStoredToken();
 
   return {
-    'Content-Type': 'application/json',
+    ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
     ...headers
   };
@@ -22,11 +26,13 @@ const apiRequest = async (path, options = {}) => {
     auth = true
   } = options;
 
+  const isFormData = isFormDataBody(body);
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     credentials: 'include',
-    headers: buildHeaders(headers, auth),
-    body: body ? JSON.stringify(body) : undefined
+    headers: buildHeaders({ headers, auth, isFormData }),
+    body: body ? (isFormData ? body : JSON.stringify(body)) : undefined
   });
 
   const payload = await response.json().catch(() => null);
