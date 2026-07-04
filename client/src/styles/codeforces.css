@@ -831,3 +831,184 @@ kbd {
     flex-direction: column;
   }
 }
+
+.empty-chart {
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+  border: 1px dashed #c5d2dd;
+  background: #f8fbfd;
+  color: #607080;
+  font-size: 13px;
+}
+
+.rating-graph-wrap {
+  width: 100%;
+}
+
+.recharts-reference-area-rect.band-newbie {
+  fill: rgba(119, 119, 119, 0.18);
+}
+
+.recharts-reference-area-rect.band-pupil {
+  fill: rgba(39, 174, 96, 0.18);
+}
+
+.recharts-reference-area-rect.band-specialist {
+  fill: rgba(3, 168, 158, 0.16);
+}
+
+.recharts-reference-area-rect.band-expert {
+  fill: rgba(46, 134, 193, 0.16);
+}
+
+.recharts-reference-area-rect.band-master {
+  fill: rgba(142, 68, 173, 0.15);
+}
+
+.recharts-reference-area-rect.band-im {
+  fill: rgba(255, 140, 0, 0.14);
+}
+
+.recharts-reference-area-rect.band-gm {
+  fill: rgba(204, 0, 0, 0.14);
+}
+
+.enhanced-dashboard-grid {
+  margin-bottom: 18px;
+}
+
+.heatmap-wrap {
+  display: grid;
+  gap: 10px;
+}
+
+.heatmap-months {
+  display: flex;
+  align-items: center;
+}
+
+.heatmap-side-gap {
+  width: 36px;
+  flex-shrink: 0;
+}
+
+.heatmap-month-row {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+
+.heatmap-month-label {
+  flex: 1;
+  min-width: 10px;
+  color: #667085;
+  font-size: 11px;
+}
+
+.heatmap-grid-block {
+  display: flex;
+  gap: 8px;
+}
+
+.heatmap-day-labels {
+  display: grid;
+  grid-template-rows: repeat(7, 12px);
+  gap: 4px;
+  width: 36px;
+  padding-top: 1px;
+}
+
+.heatmap-day-label {
+  color: #667085;
+  font-size: 11px;
+  line-height: 12px;
+}
+
+.heatmap-weeks {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.heatmap-week {
+  display: grid;
+  grid-template-rows: repeat(7, 12px);
+  gap: 4px;
+}
+
+.heatmap-cell {
+  width: 12px;
+  height: 12px;
+  border: 1px solid rgba(125, 145, 165, 0.12);
+  box-sizing: border-box;
+}
+
+.heatmap-cell.level-0 {
+  background: #ebedf0;
+}
+
+.heatmap-cell.level-1 {
+  background: #c9efcf;
+}
+
+.heatmap-cell.level-2 {
+  background: #77d879;
+}
+
+.heatmap-cell.level-3 {
+  background: #34b556;
+}
+
+.heatmap-cell.level-4 {
+  background: #1f7a37;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #667085;
+  font-size: 11px;
+}
+
+.summary-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.summary-stat {
+  border: 1px solid #cbd5df;
+  background: #ffffff;
+  padding: 16px;
+  box-shadow: 0 8px 18px rgba(20, 83, 116, 0.05);
+}
+
+.summary-stat strong {
+  display: block;
+  color: #0f4c75;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.summary-stat span {
+  color: #5d6b79;
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .summary-stats-grid {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .summary-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
