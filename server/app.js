@@ -2,6 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
+import authRouter from './routes/auth.routes.js';
+import userRouter from './routes/user.routes.js';
+import gameRouter from './routes/game.routes.js';
+import leaderboardRouter from './routes/leaderboard.routes.js';
+
 import { SuccessResponse } from './utils/apiResponse.js';
 import {
   notFoundHandler,
@@ -31,6 +36,11 @@ app.get('/api/health', (req, res) => {
     }
   }).send(res);
 });
+
+app.use('/api/auth', authRouter);
+app.use('/api/users', userRouter);
+app.use('/api/game', gameRouter);
+app.use('/api/leaderboard', leaderboardRouter);
 
 app.use(notFoundHandler);
 app.use(globalErrorHandler);

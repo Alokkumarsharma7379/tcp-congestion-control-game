@@ -137,8 +137,8 @@ userSchema.virtual('rank').get(function getRank() {
   return RANKS.find((tier) => this.rating >= tier.min)?.label || 'Newbie';
 });
 
-userSchema.index({ username: 1 }, { unique: true });
-userSchema.index({ email: 1 }, { unique: true });
+// userSchema.index({ username: 1 }, { unique: true });
+// userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ rating: -1, username: 1 });
 userSchema.index({ lastVisit: -1 });
 userSchema.index({ friends: 1 });

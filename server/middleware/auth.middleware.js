@@ -14,7 +14,9 @@ const getBearerToken = (authorizationHeader = '') => {
 
 const protect = async (req, res, next) => {
   try {
-    const token = getBearerToken(req.headers.authorization);
+    const token =
+      getBearerToken(req.headers.authorization) ||
+      req.cookies?.accessToken;
 
     if (!token) {
       throw new ApiError({

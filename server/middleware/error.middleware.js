@@ -1,8 +1,30 @@
 import { ApiError } from '../utils/apiResponse.js';
 
+const handleJwtError = () => {
+  return new ApiError({
+    statusCode: 401,
+    message: 'Invalid authentication token.'
+  });
+};
+
+const handleJwtExpiredError = () => {
+  return new ApiError({
+    statusCode: 401,
+    message: 'Session expired. Please sign in again.'
+  });
+};
+
 const normalizeError = (error) => {
   if (error instanceof ApiError) {
     return error;
+  }
+
+  if (error.name === 'JsonWebTokenError') {
+    return handleJwtError();
+  }
+
+  if (error.name === 'TokenExpiredError') {
+    return handleJwtExpiredError();
   }
 
   return new ApiError({

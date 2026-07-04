@@ -1,25 +1,95 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+
+import { useAuth } from '../context/AuthContext';
 import '../styles/codeforces.css';
 
 function LoginPage() {
+  const navigate = useNavigate();
+  const { login } = useAuth();
+
+  const [form, setForm] = useState({
+    username: '',
+    password: ''
+  });
+
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const updateField = (event) => {
+    const { name, value } = event.target;
+
+    setForm((prev) => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    setError('');
+    setSubmitting(true);
+
+    try {
+      await login(form);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.message || 'Login failed.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <div className="content">
-      <h2 style={{ color: '#1a5276' }}>Log In</h2>
-      <form style={{ maxWidth: 320 }}>
-        <label style={{ display: 'grid', gap: 4 }}>
-          <span>Email</span>
-          <input type="email" required />
-        </label>
-        <label style={{ display: 'grid', gap: 4, marginTop: 8 }}>
-          <span>Password</span>
-          <input type="password" required />
-        </label>
-        <button className="cf-btn primary" style={{ marginTop: 12 }}>Log In</button>
-      </form>
-      <p style={{ fontSize: 12, marginTop: 10 }}>
-        New? <Link to="/register">Create an account</Link>
-      </p>
-    </div>
+    <main className="content">
+      <section className="page-title-block">
+        <h2>Login</h2>
+        <p>Sign in to save game sessions, rating changes, and leaderboard progress.</p>
+      </section>
+
+      <section className="panel auth-panel">
+        <div className="panel-header">▶ Account Login</div>
+
+        <div className="panel-body">
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <label>
+              <span>Username</span>
+              <input
+                name="username"
+                type="text"
+                value={form.username}
+                onChange={updateField}
+                autoComplete="username"
+                required
+              />
+            </label>
+
+            <label>
+              <span>Password</span>
+              <input
+                name="password"
+                type="password"
+                value={form.password}
+                onChange={updateField}
+                autoComplete="current-password"
+                required
+              />
+            </label>
+
+            {error && <div className="form-error">{error}</div>}
+
+            <div className="form-actions">
+              <button className="cf-btn primary" type="submit" disabled={submitting}>
+                {submitting ? 'Signing in...' : 'Login'}
+              </button>
+
+              <Link to="/register">Create account</Link>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
   );
 }
 
