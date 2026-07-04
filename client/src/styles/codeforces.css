@@ -697,3 +697,39 @@ kbd {
     padding: 4px 10px;
   }
 }
+
+
+
+/* ━━━━━━━━━━ Results overlay ━━━━━━━━━━*/
+
+.results-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0 0 0 / 0.55);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+}
+
+.results-card {
+  min-width: 320px;
+  background: #ffffff;
+  border: 3px solid #2e86c1;
+  padding: 20px 26px;
+  box-shadow: 0 0 6px rgba(0 0 0 / 0.35);
+}
+.results-card h3 {
+  margin: 0 0 12px;
+  color: #1a5276;
+  font-size: 18px;
+  text-align: center;
+}
+.results-table .result-label { width: 190px; font-weight: bold; }
+.results-table .result-value { text-align: right; }
+.play-again-btn {
+  display: block;
+  margin: 18px auto 4px;
+  padding: 6px 26px;
+}
+
+/* rating colour inherits status-* classes already defined */

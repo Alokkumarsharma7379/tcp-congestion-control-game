@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import './styles/codeforces.css';
 
+/* ━━━━━━━━━━ CONSTANTS ━━━━━━━━━━ */
+
 const REWARD = 1.0;
 const DROP_PENALTY = 4.0;
 const UTIL_BONUS = 0.5;
@@ -9,6 +11,8 @@ const LOSS_WINDOW = 20;
 const HISTORY_LEN = 80;
 const MIN_RATE = 1;
 const MAX_RATE = 80;
+
+const PHASE = { SETUP: 'SETUP', RUNNING: 'RUNNING', FINISHED: 'FINISHED' };
 
 const SPEED_OPTIONS = [
   ['800', 'Slow'],
@@ -20,7 +24,7 @@ const SPEED_OPTIONS = [
 const SCENARIO_NAMES = {
   1: 'Scenario 1 — Stable Bandwidth',
   2: 'Scenario 2 — Bursty Traffic',
-  3: 'Scenario 3 — Shifting Bandwidth'
+  3: 'Scenario 3 — Oscillating Network'
 };
 
 const PACKET_STATUS_LABEL = {
@@ -30,161 +34,125 @@ const PACKET_STATUS_LABEL = {
   empty: ''
 };
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
+/* ━━━━━━━━━━ HELPERS ━━━━━━━━━━ */
 
-function boundedPush(items, nextValue, limit) {
-  const next = [...items, nextValue];
-  return next.length > limit ? next.slice(next.length - limit) : next;
-}
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-function getBandwidth(scenario, tick) {
-  if (scenario === 1) return 30;
-  if (scenario === 2) return 28;
-  if (scenario === 3) return 14 + 20 * Math.abs(Math.sin(tick / 25));
+const boundedPush = (arr, v, limit) =>
+  arr.length >= limit ? [...arr.slice(1), v] : [...arr, v];
 
+const getBandwidth = (scenario, t) => {
+  if (scenario === 1) return 30;                             // fixed
+  if (scenario === 2) return 30;                             // fixed
+  if (scenario === 3) return 15 + 15 * Math.sin(t / 10);     // oscillate
   return 30;
-}
+};
 
-function getOtherTraffic(scenario, tick) {
-  if (scenario === 1) {
-    return 8 + 4 * Math.sin(tick / 15);
-  }
-
-  if (scenario === 2) {
+const getOtherTraffic = (scenario, t) => {
+  if (scenario === 1) return 15 + 10 * Math.sin(t / 5);                   // sine wave
+  if (scenario === 2)
     return Math.random() < 0.1
-      ? 20 + Math.random() * 16
-      : 4 + Math.random() * 5;
-  }
-
-  if (scenario === 3) {
-    return 6 + 3 * Math.sin(tick / 10);
-  }
-
+      ? 25 + Math.random() * 20                                           // burst
+      : 5 + Math.random() * 5;
+  if (scenario === 3) return 10 + 8 * Math.sin((t + 20) / 8);             // out-of-phase
   return 8;
-}
+};
 
-function createInitialGame(settings, active = false) {
-  return {
-    active,
-    completed: false,
-    tick: 0,
-    playerRate: settings.initialRate,
-    playerQueue: 0,
-    otherQueue: 0,
-    totalScore: 0,
-    totalDelivered: 0,
-    totalDropped: 0,
-    totalSent: 0,
-    congestionEvents: 0,
-    aimdRate: settings.initialRate,
-    sentWindow: [],
-    droppedWindow: [],
-    histTP: [],
-    histLoss: [],
-    histLat: [],
-    histDelta: [],
-    histAIMD: [],
-    aimdLog: [],
-    packets: [],
-    lastResult: null
-  };
-}
+const tierFromScore = (score) => {
+  if (score >= 150) return ['Grandmaster', 'status-bad'];
+  if (score >= 120) return ['Master', 'status-warn'];
+  if (score >= 90) return ['Expert', 'status-warn'];
+  if (score >= 60) return ['Specialist', 'status-ok'];
+  if (score >= 40) return ['Pupil', 'status-ok'];
+  if (score >= 20) return ['Newbie', 'status-ok'];
+  return ['Beginner', 'muted-status'];
+};
 
-function buildPackets({ tick, sent, dropped, delivered }) {
-  return Array.from({ length: sent }, (_, index) => {
+/* ━━━━━━━━━━ SIMULATION CORE ━━━━━━━━━━ */
+
+const createInitialGame = (settings, phase) => ({
+  phase,
+  tick: 0,
+  playerRate: settings.initialRate,
+  playerQueue: 0,
+  otherQueue: 0,
+  totalScore: 0,
+  totalDelivered: 0,
+  totalDropped: 0,
+  totalSent: 0,
+  congestionEvents: 0,
+  aimdRate: settings.initialRate,
+  sentWindow: [],
+  droppedWindow: [],
+  histTP: [],
+  histLoss: [],
+  histLat: [],
+  histDelta: [],
+  histAIMD: [],
+  aimdLog: [],
+  packets: [],
+  lastResult: null
+});
+
+const buildPackets = ({ t, sent, dropped, delivered }) =>
+  Array.from({ length: sent }, (_, i) => {
     let state = 'inFlight';
-
-    if (index < dropped) {
-      state = 'dropped';
-    } else if (index < dropped + delivered) {
-      state = 'acked';
-    }
-
-    return {
-      id: `${tick}-${index + 1}`,
-      sequence: index + 1,
-      state
-    };
+    if (i < dropped) state = 'dropped';
+    else if (i < dropped + delivered) state = 'acked';
+    return { id: `${t}-${i}`, sequence: i + 1, state };
   });
-}
 
-function simulateTick(prev, settings, rateDelta) {
-  if (!prev.active || prev.tick >= settings.maxTicks) {
-    return {
-      ...prev,
-      active: false,
-      completed: prev.tick > 0
-    };
+function simulateTick(prev, settings, delta) {
+  if (prev.tick >= settings.maxTicks) {
+    return { ...prev, phase: PHASE.FINISHED };
   }
 
-  const tick = prev.tick + 1;
-  const playerRate = clamp(prev.playerRate + rateDelta, MIN_RATE, MAX_RATE);
+  const t = prev.tick + 1;
+  const playerRate = clamp(prev.playerRate + delta, MIN_RATE, MAX_RATE);
+  const bw = Math.round(Math.max(5, getBandwidth(settings.scenario, t)));
+  const ot = Math.round(Math.max(0, getOtherTraffic(settings.scenario, t)));
 
-  const rawBW = Math.max(5, getBandwidth(settings.scenario, tick));
-  const rawOT = Math.max(
-    0,
-    getOtherTraffic(settings.scenario, tick) + (Math.random() - 0.5) * 2
-  );
-
-  const bw = Math.round(rawBW);
-  const ot = Math.round(rawOT);
-
+  /* arrivals, drop, service */
   const pArr = playerRate;
   const oArr = ot;
   const arrivals = pArr + oArr;
-
   const curQ = prev.playerQueue + prev.otherQueue;
   const overflow = Math.max(0, curQ + arrivals - settings.bufferSize);
-
-  let pDrop = 0;
-  let oDrop = 0;
-
-  if (overflow > 0) {
-    const pShare = arrivals > 0 ? pArr / arrivals : 0.5;
-    pDrop = Math.min(Math.ceil(overflow * pShare), pArr);
+  let pDrop = 0,
+    oDrop = 0;
+  if (overflow) {
+    const share = arrivals > 0 ? pArr / arrivals : 0.5;
+    pDrop = Math.min(Math.ceil(overflow * share), pArr);
     oDrop = Math.min(overflow - pDrop, oArr);
   }
-
-  let playerQueue = prev.playerQueue + pArr - pDrop;
-  let otherQueue = prev.otherQueue + oArr - oDrop;
-
-  const qLen = playerQueue + otherQueue;
+  let playerQ = prev.playerQueue + pArr - pDrop;
+  let otherQ = prev.otherQueue + oArr - oDrop;
+  const qLen = playerQ + otherQ;
   const served = Math.min(qLen, bw);
-
   let pDel = 0;
-  let oDel = 0;
+  if (qLen) pDel = Math.round(served * (playerQ / qLen));
+  playerQ = Math.max(0, playerQ - pDel);
+  otherQ = Math.max(0, otherQ - (served - pDel));
 
-  if (qLen > 0) {
-    pDel = Math.round(served * (playerQueue / qLen));
-    oDel = served - pDel;
-  }
-
-  playerQueue = Math.max(0, playerQueue - pDel);
-  otherQueue = Math.max(0, otherQueue - oDel);
-
-  const qAfter = playerQueue + otherQueue;
-  const latency = bw > 0 ? qAfter / bw : 10;
+  /* metrics */
+  const latency = bw ? (playerQ + otherQ) / bw : 10;
   const latNorm = Math.min(1, latency / 6);
-
-  const sentWindow = boundedPush(prev.sentWindow, pArr, LOSS_WINDOW);
-  const droppedWindow = boundedPush(prev.droppedWindow, pDrop, LOSS_WINDOW);
-
-  const sentInWindow = sentWindow.reduce((sum, value) => sum + value, 0);
-  const droppedInWindow = droppedWindow.reduce((sum, value) => sum + value, 0);
-  const lossRate = sentInWindow > 0 ? droppedInWindow / sentInWindow : 0;
-
-  const utilBonus = pDel > 0 && lossRate < 0.01 ? UTIL_BONUS : 0;
-  const scoreDelta = REWARD * pDel - DROP_PENALTY * pDrop + utilBonus;
-
+  const sentWin = boundedPush(prev.sentWindow, pArr, LOSS_WINDOW);
+  const dropWin = boundedPush(prev.droppedWindow, pDrop, LOSS_WINDOW);
+  const lossRate =
+    sentWin.reduce((s, v) => s + v, 0) > 0
+      ? dropWin.reduce((s, v) => s + v, 0) /
+        sentWin.reduce((s, v) => s + v, 0)
+      : 0;
+  const utilBonus = pDel && lossRate < 0.01 ? UTIL_BONUS : 0;
+  const scoreΔ = REWARD * pDel - DROP_PENALTY * pDrop + utilBonus;
   const congestion = pDrop > 0 || latNorm > 0.75;
   const aimdRate = congestion
     ? Math.max(1, prev.aimdRate / 2)
     : Math.min(MAX_RATE, prev.aimdRate + 1);
 
-  const tpNorm = playerRate > 0 ? Math.min(1, pDel / playerRate) : 0;
-  const deltaNorm = clamp((scoreDelta + 15) / 35, 0, 1);
+  const tpNorm = playerRate ? Math.min(1, pDel / playerRate) : 0;
+  const deltaNorm = clamp((scoreΔ + 15) / 35, 0, 1);
   const aimdNorm = Math.min(1, aimdRate / 50);
 
   const result = {
@@ -195,81 +163,74 @@ function simulateTick(prev, settings, rateDelta) {
     pDel,
     latNorm,
     lossRate,
-    scoreDelta,
+    scoreΔ,
     congestion,
-    qAfter,
-    served,
+    queue: playerQ + otherQ,
     playerRate
   };
 
-  const aimdLogRow = {
-    tick,
+  const aimdRow = {
+    tick: t,
     aimdRate: Math.round(aimdRate),
     playerRate,
     congestion,
-    action: congestion
-      ? `÷2 → ${Math.round(aimdRate)}`
-      : `+1 → ${Math.round(aimdRate)}`
+    action: congestion ? `÷2 → ${Math.round(aimdRate)}` : `+1 → ${Math.round(aimdRate)}`
   };
 
   return {
     ...prev,
-    active: tick < settings.maxTicks,
-    completed: tick >= settings.maxTicks,
-    tick,
+    tick: t,
     playerRate,
-    playerQueue,
-    otherQueue,
-    totalScore: prev.totalScore + scoreDelta,
+    playerQueue: playerQ,
+    otherQueue: otherQ,
+    totalScore: prev.totalScore + scoreΔ,
     totalDelivered: prev.totalDelivered + pDel,
     totalDropped: prev.totalDropped + pDrop,
     totalSent: prev.totalSent + pArr,
     congestionEvents: prev.congestionEvents + (congestion ? 1 : 0),
     aimdRate,
-    sentWindow,
-    droppedWindow,
+    sentWindow: sentWin,
+    droppedWindow: dropWin,
     histTP: boundedPush(prev.histTP, tpNorm, HISTORY_LEN),
     histLoss: boundedPush(prev.histLoss, lossRate, HISTORY_LEN),
     histLat: boundedPush(prev.histLat, latNorm, HISTORY_LEN),
     histDelta: boundedPush(prev.histDelta, deltaNorm, HISTORY_LEN),
     histAIMD: boundedPush(prev.histAIMD, aimdNorm, HISTORY_LEN),
-    aimdLog: [aimdLogRow, ...prev.aimdLog].slice(0, 25),
-    packets: buildPackets({
-      tick,
-      sent: pArr,
-      dropped: pDrop,
-      delivered: Math.min(pDel, Math.max(0, pArr - pDrop))
-    }),
-    lastResult: result
+    aimdLog: [aimdRow, ...prev.aimdLog].slice(0, 25),
+    packets: buildPackets({ t, sent: pArr, dropped: pDrop, delivered: Math.min(pDel, pArr - pDrop) }),
+    lastResult: result,
+    phase: t >= settings.maxTicks ? PHASE.FINISHED : PHASE.RUNNING
   };
 }
 
-function getRateDeltaLabel(rateDelta) {
-  if (rateDelta === 0) return '0 (Maintain Rate)';
-  if (rateDelta > 0) return `+${rateDelta} (Accelerating)`;
+/* ━━━━━━━━━━ PRESENTATION HELPERS ━━━━━━━━━━ */
 
-  return `${rateDelta} (Decelerating)`;
-}
+const statusToClass = (s) =>
+  s === 'Good' || s === 'OK' || s === 'Low'
+    ? 'status-ok'
+    : s === 'Warning' || s === 'Medium'
+    ? 'status-warn'
+    : s === 'High' || s === '[!]' || s === 'Critical'
+    ? 'status-bad'
+    : 'muted-status';
 
-function statusToClass(status) {
-  if (status === 'Good' || status === 'OK' || status === 'Low') return 'status-ok';
-  if (status === 'Warning' || status === 'Medium') return 'status-warn';
-  if (status === 'High' || status === '[!]' || status === 'Critical') return 'status-bad';
+const rateDeltaLabel = (d) =>
+  d === 0 ? '0 (Maintain Rate)' : d > 0 ? `+${d} (Accelerating)` : `${d} (Decelerating)`;
 
-  return 'muted-status';
-}
+/* ━━━━━━━━━━ COMPONENTS ━━━━━━━━━━ */
 
 function PacketGrid({ packets, playerRate }) {
-  const visibleCells = Math.max(24, Math.min(96, Math.ceil(playerRate / 8) * 8));
-
-  const cells = [
-    ...packets,
-    ...Array.from({ length: Math.max(0, visibleCells - packets.length) }, (_, index) => ({
-      id: `empty-${index}`,
-      state: 'empty',
-      sequence: ''
-    }))
-  ];
+  const cells = useMemo(() => {
+    const visible = Math.max(24, Math.min(96, Math.ceil(playerRate / 8) * 8));
+    return [
+      ...packets,
+      ...Array.from({ length: Math.max(0, visible - packets.length) }, (_, i) => ({
+        id: `e-${i}`,
+        state: 'empty',
+        sequence: ''
+      }))
+    ];
+  }, [packets, playerRate]);
 
   return (
     <div className="packet-grid-wrap">
@@ -278,94 +239,143 @@ function PacketGrid({ packets, playerRate }) {
         <span>{packets.length ? 'Latest tick packet window' : 'Waiting for first tick'}</span>
       </div>
 
-      <div className="packet-grid" aria-label="TCP packet visualizer">
-        {cells.map((packet) => (
-          <div
-            key={packet.id}
-            className={`packet-cell packet-${packet.state}`}
-            title={packet.sequence ? `Packet #${packet.sequence} · ${packet.state}` : ''}
-          >
-            {PACKET_STATUS_LABEL[packet.state]}
+      <div className="packet-grid">
+        {cells.map((p) => (
+          <div key={p.id} className={`packet-cell packet-${p.state}`}>
+            {PACKET_STATUS_LABEL[p.state]}
           </div>
         ))}
       </div>
 
       <div className="packet-legend">
-        <span><i className="legend-box in-flight" /> In-flight</span>
-        <span><i className="legend-box acked" /> Acknowledged</span>
-        <span><i className="legend-box dropped" /> Dropped</span>
+        <span>
+          <i className="legend-box in-flight" /> In-flight
+        </span>
+        <span>
+          <i className="legend-box acked" /> Acknowledged
+        </span>
+        <span>
+          <i className="legend-box dropped" /> Dropped
+        </span>
       </div>
     </div>
   );
 }
 
 function HistoryCanvas({ game }) {
-  const canvasRef = useRef(null);
+  const ref = useRef(null);
 
   const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    canvas.width = canvas.offsetWidth || 400;
-    canvas.height = canvas.offsetHeight || 175;
-
-    const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
-
-    ctx.clearRect(0, 0, width, height);
+    const c = ref.current;
+    if (!c) return;
+    c.width = c.offsetWidth;
+    c.height = c.offsetHeight;
+    const { width, height } = c;
+    const ctx = c.getContext('2d');
 
     ctx.fillStyle = '#fafafa';
     ctx.fillRect(0, 0, width, height);
 
     ctx.strokeStyle = '#e0e0e0';
     ctx.lineWidth = 0.5;
-
-    [0.25, 0.5, 0.75].forEach((frac) => {
+    [0.25, 0.5, 0.75].forEach((f) => {
       ctx.beginPath();
-      ctx.moveTo(0, height * frac);
-      ctx.lineTo(width, height * frac);
+      ctx.moveTo(0, height * f);
+      ctx.lineTo(width, height * f);
       ctx.stroke();
     });
 
     const series = [
-      { data: game.histTP, color: '#2e86c1' },
-      { data: game.histLoss, color: '#cc0000' },
-      { data: game.histLat, color: '#d4ac0d' },
-      { data: game.histDelta, color: '#27ae60' },
-      { data: game.histAIMD, color: '#8e44ad' }
+      { d: game.histTP, c: '#2e86c1' },
+      { d: game.histLoss, c: '#cc0000' },
+      { d: game.histLat, c: '#d4ac0d' },
+      { d: game.histDelta, c: '#27ae60' },
+      { d: game.histAIMD, c: '#8e44ad' }
     ];
 
-    series.forEach(({ data, color }) => {
-      if (data.length < 2) return;
-
+    series.forEach(({ d, c }) => {
+      if (d.length < 2) return;
       ctx.beginPath();
-      ctx.strokeStyle = color;
+      ctx.strokeStyle = c;
       ctx.lineWidth = 1.5;
-
-      data.forEach((value, index) => {
-        const x = (index / (data.length - 1)) * width;
-        const y = height - 4 - clamp(value, 0, 1) * (height - 8);
-
-        if (index === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+      d.forEach((v, i) => {
+        const x = (i / (d.length - 1)) * width;
+        const y = height - 4 - clamp(v, 0, 1) * (height - 8);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
       });
-
       ctx.stroke();
     });
-  }, [game.histAIMD, game.histDelta, game.histLat, game.histLoss, game.histTP]);
+  }, [game]);
 
-  useEffect(() => {
-    draw();
-  }, [draw]);
-
+  useEffect(() => draw(), [draw, game]);
   useEffect(() => {
     window.addEventListener('resize', draw);
     return () => window.removeEventListener('resize', draw);
   }, [draw]);
 
-  return <canvas ref={canvasRef} className="history-canvas" />;
+  return <canvas ref={ref} className="history-canvas" />;
 }
+
+function ResultsOverlay({ game, onReset }) {
+  const lossRate = game.totalSent ? game.totalDropped / game.totalSent : 0;
+  const efficiency = game.totalSent ? game.totalDelivered / game.totalSent : 0;
+  const [tier, tierClass] = tierFromScore(game.totalScore);
+
+  return (
+    <div className="results-overlay">
+      <div className="results-card">
+        <h3>Round Results</h3>
+
+        <table className="cf-table results-table">
+          <tbody>
+            <tr>
+              <td className="result-label">Total Score</td>
+              <td className="result-value">{Math.round(game.totalScore)}</td>
+            </tr>
+            <tr>
+              <td className="result-label">Ticks Completed</td>
+              <td className="result-value">{game.tick}</td>
+            </tr>
+            <tr>
+              <td className="result-label">Packets Sent</td>
+              <td className="result-value">{game.totalSent}</td>
+            </tr>
+            <tr>
+              <td className="result-label">Delivered</td>
+              <td className="result-value status-ok">{game.totalDelivered}</td>
+            </tr>
+            <tr>
+              <td className="result-label">Dropped</td>
+              <td className="result-value status-bad">{game.totalDropped}</td>
+            </tr>
+            <tr>
+              <td className="result-label">Loss Rate</td>
+              <td className="result-value">{(lossRate * 100).toFixed(2)} %</td>
+            </tr>
+            <tr>
+              <td className="result-label">Efficiency</td>
+              <td className="result-value">{(efficiency * 100).toFixed(2)} %</td>
+            </tr>
+            <tr>
+              <td className="result-label">Congestion Events</td>
+              <td className="result-value">{game.congestionEvents}</td>
+            </tr>
+            <tr>
+              <td className="result-label">Rating Tier</td>
+              <td className={`result-value ${tierClass}`}>{tier}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <button className="cf-btn primary play-again-btn" onClick={onReset}>
+          Play Again
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ━━━━━━━━━━ MAIN COMPONENT ━━━━━━━━━━ */
 
 function App() {
   const [settings, setSettings] = useState({
@@ -374,423 +384,314 @@ function App() {
     bufferSize: 50,
     initialRate: 10
   });
-
-  const [game, setGame] = useState(() => createInitialGame(settings));
+  const [game, setGame] = useState(() => createInitialGame(settings, PHASE.SETUP));
   const [rateDelta, setRateDelta] = useState(0);
-  const [autoRunning, setAutoRunning] = useState(false);
+  const [auto, setAuto] = useState(false);
   const [speed, setSpeed] = useState(400);
 
   const progress = Math.round((game.tick / settings.maxTicks) * 100);
   const result = game.lastResult;
 
+  /* ━━ metrics table data */
   const metrics = useMemo(() => {
-    const bufferFrac = result ? result.qAfter / settings.bufferSize : 0;
-    const throughputFrac = result && game.playerRate > 0 ? result.pDel / game.playerRate : 0;
-    const lossRate = result ? result.lossRate : 0;
+    const bufFrac = result ? result.queue / settings.bufferSize : 0;
+    const tpFrac = result && game.playerRate ? result.pDel / game.playerRate : 0;
+    const loss = result ? result.lossRate : 0;
 
     return [
       ['Current Tick', `${game.tick} / ${settings.maxTicks}`, ''],
-      ['Send Rate', `${game.playerRate} pkts/tick`, rateDelta === 0 ? 'Stable' : rateDelta > 0 ? 'Accelerating' : 'Decelerating'],
-      ['Rate Delta', getRateDeltaLabel(rateDelta), ''],
-      ['Buffer Fill', result ? `${Math.round(result.qAfter)} / ${settings.bufferSize} pkts` : '— / — pkts', bufferFrac > 0.85 ? 'Critical' : bufferFrac > 0.6 ? 'Warning' : 'OK'],
-      ['Throughput', result ? `${result.pDel} pkts/tick` : '— pkts/tick', throughputFrac > 0.75 ? 'Good' : throughputFrac > 0.3 ? 'Warning' : 'Low'],
-      ['Latency (norm 0–1)', result ? result.latNorm.toFixed(3) : '—', result && result.latNorm > 0.7 ? 'High' : result && result.latNorm > 0.3 ? 'Medium' : 'Low'],
-      ['Loss Rate (20-tick window)', `${(lossRate * 100).toFixed(1)} %`, lossRate > 0.1 ? 'High' : lossRate > 0.02 ? 'Warning' : 'Good'],
-      ['Packets Dropped (this tick)', result ? `${result.pDrop} pkts` : '—', result && result.pDrop > 0 ? '[!]' : 'OK'],
-      ['Score Δ (this tick)', result ? `${result.scoreDelta >= 0 ? '+' : ''}${result.scoreDelta.toFixed(1)}` : '—', result && result.scoreDelta < 0 ? 'High' : 'Good'],
+      ['Send Rate', `${game.playerRate} pkts/tick`, rateDelta ? 'Δ' : 'Stable'],
+      ['Rate Delta', rateDeltaLabel(rateDelta), ''],
+      ['Buffer Fill', result ? `${result.queue} / ${settings.bufferSize}` : '—', bufFrac > 0.85 ? 'Critical' : bufFrac > 0.6 ? 'Warning' : 'OK'],
+      ['Throughput', result ? `${result.pDel} pkts/tick` : '—', tpFrac > 0.75 ? 'Good' : tpFrac > 0.3 ? 'Warning' : 'Low'],
+      ['Latency (norm)', result ? result.latNorm.toFixed(3) : '—', result && result.latNorm > 0.7 ? 'High' : result && result.latNorm > 0.3 ? 'Medium' : 'Low'],
+      ['Loss Rate (20)', `${(loss * 100).toFixed(1)} %`, loss > 0.1 ? 'High' : loss > 0.02 ? 'Warning' : 'Good'],
+      ['Dropped (tick)', result ? result.pDrop : '—', result && result.pDrop ? '[!]' : 'OK'],
+      ['Score Δ (tick)', result ? `${result.scoreΔ >= 0 ? '+' : ''}${result.scoreΔ.toFixed(1)}` : '—', result && result.scoreΔ < 0 ? 'High' : 'Good'],
       ['Total Score', Math.round(game.totalScore), ''],
-      ['AIMD Ghost Rate', `${Math.round(game.aimdRate)} pkts/tick`, 'reference'],
-      ['Congestion This Tick?', result ? (result.congestion ? 'YES [!]' : 'No') : '—', result && result.congestion ? '[!]' : 'OK'],
-      ['Total Congestion Events', game.congestionEvents, '']
+      ['AIMD Ghost Rate', Math.round(game.aimdRate), 'reference'],
+      ['Congestion?', result ? (result.congestion ? 'YES [!]' : 'No') : '—', result && result.congestion ? '[!]' : 'OK'],
+      ['Congestion Events', game.congestionEvents, '']
     ];
   }, [game, rateDelta, result, settings.bufferSize, settings.maxTicks]);
 
-  const updateSetting = (key, value) => {
-    const numericValue = Number(value);
+  /* ━━ handlers */
+  const updateSetting = (k, v) =>
+    setSettings((s) => ({ ...s, [k]: Number(v) }));
 
-    setSettings((prev) => ({
-      ...prev,
-      [key]: numericValue
-    }));
+  const resetToSetup = () => {
+    setRateDelta(0);
+    setAuto(false);
+    setGame(createInitialGame(settings, PHASE.SETUP));
   };
 
   const startGame = () => {
-    const safeSettings = {
+    const safe = {
       scenario: clamp(settings.scenario, 1, 3),
       maxTicks: clamp(settings.maxTicks, 10, 300),
       bufferSize: clamp(settings.bufferSize, 10, 200),
       initialRate: clamp(settings.initialRate, MIN_RATE, MAX_RATE)
     };
-
-    setSettings(safeSettings);
+    setSettings(safe);
     setRateDelta(0);
-    setAutoRunning(false);
-    setGame(createInitialGame(safeSettings, true));
+    setAuto(false);
+    setGame(createInitialGame(safe, PHASE.RUNNING));
   };
 
-  const stopGame = () => {
-    setAutoRunning(false);
-    setGame((prev) => ({
-      ...prev,
-      active: false,
-      completed: prev.tick > 0
-    }));
-  };
+  const endGame = () =>
+    setGame((g) => ({ ...g, phase: PHASE.FINISHED }));
 
-  const advanceTick = useCallback(() => {
-    setGame((prev) => simulateTick(prev, settings, rateDelta));
-  }, [rateDelta, settings]);
+  const tickOnce = useCallback(
+    () => setGame((g) => simulateTick(g, settings, rateDelta)),
+    [rateDelta, settings]
+  );
+
+  /* ━━ timers & shortcuts */
+  useEffect(() => {
+    if (game.phase !== PHASE.RUNNING || !auto) return;
+    const id = setInterval(tickOnce, speed);
+    return () => clearInterval(id);
+  }, [auto, speed, tickOnce, game.phase]);
 
   useEffect(() => {
-    if (!autoRunning || !game.active) {
-      return undefined;
-    }
-
-    const timer = window.setInterval(advanceTick, speed);
-
-    return () => window.clearInterval(timer);
-  }, [advanceTick, autoRunning, game.active, speed]);
+    if (game.phase !== PHASE.RUNNING && auto) setAuto(false);
+  }, [game.phase, auto]);
 
   useEffect(() => {
-    if (!game.active && autoRunning) {
-      setAutoRunning(false);
-    }
-  }, [autoRunning, game.active]);
-
-  useEffect(() => {
-    const onKeyDown = (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        if (!game.active) return;
-
-        event.preventDefault();
-        advanceTick();
-        return;
-      }
-
-      if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
-        event.preventDefault();
-        setRateDelta((value) => clamp(value + 1, -10, 10));
-        return;
-      }
-
-      if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
-        event.preventDefault();
-        setRateDelta((value) => clamp(value - 1, -10, 10));
+    const key = (e) => {
+      if (game.phase !== PHASE.RUNNING) return;
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        tickOnce();
+      } else if (['ArrowRight', 'ArrowUp'].includes(e.key)) {
+        e.preventDefault();
+        setRateDelta((d) => clamp(d + 1, -10, 10));
+      } else if (['ArrowLeft', 'ArrowDown'].includes(e.key)) {
+        e.preventDefault();
+        setRateDelta((d) => clamp(d - 1, -10, 10));
       }
     };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [tickOnce, game.phase]);
 
-    window.addEventListener('keydown', onKeyDown);
-
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [advanceTick, game.active]);
+  /* ━━ render shortcuts */
+  const inSetup = game.phase === PHASE.SETUP;
+  const inRun = game.phase === PHASE.RUNNING;
+  const inFinish = game.phase === PHASE.FINISHED;
 
   return (
     <div className="app-shell">
+      {/* Header */}
       <header className="site-header">
         <div>
           <h1>TCP Congestion Control — The Game</h1>
-          <p>Queue-based network simulation · React frontend migration</p>
+          <p>Queue-based network simulation</p>
         </div>
-
         <div className="header-meta">
           <span>Player: —</span>
           <span>
             Session:{' '}
-            {game.active
+            {inRun
               ? `Tick ${game.tick} / ${settings.maxTicks}`
-              : game.completed
-                ? 'Round Complete'
-                : 'Setup'}
+              : inFinish
+              ? 'Round Complete'
+              : 'Setup'}
           </span>
         </div>
       </header>
 
-      <nav className="top-nav" aria-label="Primary navigation">
+      {/* Nav & crumb */}
+      <nav className="top-nav">
         <a href="#game" className="active">Game</a>
         <a href="#visualizer">Visualizer</a>
         <a href="#controls">Controls</a>
         <a href="#algorithm">Algorithm</a>
       </nav>
-
       <div className="breadcrumb">
-        Home &rsaquo; Game &rsaquo; <strong>{game.active ? SCENARIO_NAMES[settings.scenario] : game.completed ? 'Results' : 'Setup'}</strong>
+        Home › Game › <strong>
+          {inSetup && 'Setup'}
+          {inRun && SCENARIO_NAMES[settings.scenario]}
+          {inFinish && 'Results'}
+        </strong>
       </div>
 
+      {/* Main content */}
       <main className="content" id="game">
         <section className="page-title-block">
           <h2>TCP Congestion Control Simulation</h2>
           <p>
-            You are a TCP sender sharing a hidden bottleneck with competing traffic.
-            Use the acceleration slider to probe capacity, then stabilize before drops destroy your score.
+            Adjust the acceleration slider to increase or decrease your send rate.
+            Keep throughput high and loss low to maximise score.
           </p>
         </section>
 
-        <section className="panel">
-          <div className="panel-header">▶ Round Setup</div>
-
-          <div className="panel-body">
-            <div className="setup-grid">
-              <label>
-                <span>Scenario</span>
-                <select
-                  value={settings.scenario}
-                  onChange={(event) => updateSetting('scenario', event.target.value)}
-                  disabled={game.active}
-                >
-                  <option value="1">1 — Stable bandwidth</option>
-                  <option value="2">2 — Bursty competing traffic</option>
-                  <option value="3">3 — Shifting / oscillating bandwidth</option>
-                </select>
-              </label>
-
-              <label>
-                <span>Round Length</span>
-                <input
-                  type="number"
-                  min="10"
-                  max="300"
-                  value={settings.maxTicks}
-                  onChange={(event) => updateSetting('maxTicks', event.target.value)}
-                  disabled={game.active}
-                />
-              </label>
-
-              <label>
-                <span>Buffer Size</span>
-                <input
-                  type="number"
-                  min="10"
-                  max="200"
-                  value={settings.bufferSize}
-                  onChange={(event) => updateSetting('bufferSize', event.target.value)}
-                  disabled={game.active}
-                />
-              </label>
-
-              <label>
-                <span>Initial Send Rate</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="80"
-                  value={settings.initialRate}
-                  onChange={(event) => updateSetting('initialRate', event.target.value)}
-                  disabled={game.active}
-                />
-              </label>
-            </div>
-          </div>
-        </section>
-
-        <section className="panel">
-          <div className="panel-header grey">Round Progress</div>
-
-          <div className="panel-body compact">
-            <div className="progress-copy">
-              Tick {game.tick} of {settings.maxTicks} ({progress}% complete)
-            </div>
-
-            <div className="tick-progress-wrap">
-              <div className="tick-progress-fill" style={{ width: `${progress}%` }} />
-              <div className="tick-progress-label">Tick {game.tick} / {settings.maxTicks}</div>
-            </div>
-          </div>
-        </section>
-
-        <section className="game-grid">
-          <aside className="game-column metrics-column">
-            <div className="panel-header">▶ Live Network Metrics</div>
-
-            <table className="cf-table">
-              <thead>
-                <tr>
-                  <th>Metric</th>
-                  <th className="right">Value</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {metrics.map(([label, value, status]) => (
-                  <tr key={label}>
-                    <td>{label}</td>
-                    <td className="value-cell">{value}</td>
-                    <td className={statusToClass(status)}>{status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div className="hidden-state-note">
-              <em>True bandwidth and background traffic are hidden. Infer from loss, latency, and throughput.</em>
-            </div>
-          </aside>
-
-          <section className="game-column visualizer-column" id="visualizer">
-            <div className="panel-header">▶ Signal History & Packet Window</div>
-
-            <div className="legend-row">
-              <span><i className="legend-swatch swatch-throughput" /> Throughput</span>
-              <span><i className="legend-swatch swatch-loss" /> Loss rate</span>
-              <span><i className="legend-swatch swatch-latency" /> Latency</span>
-              <span><i className="legend-swatch swatch-score" /> Score Δ</span>
-              <span><i className="legend-swatch swatch-aimd" /> AIMD ghost</span>
-            </div>
-
-            <div className="canvas-frame">
-              <HistoryCanvas game={game} />
-            </div>
-
-            <PacketGrid packets={game.packets} playerRate={game.playerRate} />
-
-            <div className="sub-panel-title">AIMD Ghost — Per-tick Rate Log</div>
-
-            <div className="log-scroll">
-              <table className="log-table">
-                <thead>
-                  <tr>
-                    <th>Tick</th>
-                    <th>Ghost Rate</th>
-                    <th>Your Rate</th>
-                    <th>Congestion?</th>
-                    <th>Ghost Action</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {game.aimdLog.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" className="empty-log">Send first tick to see log</td>
-                    </tr>
-                  ) : (
-                    game.aimdLog.map((row) => (
-                      <tr key={row.tick}>
-                        <td>{row.tick}</td>
-                        <td>{row.aimdRate}</td>
-                        <td>{row.playerRate}</td>
-                        <td className={row.congestion ? 'dropped' : 'clean'}>
-                          {row.congestion ? 'Yes' : 'No'}
-                        </td>
-                        <td>{row.action}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+        {/* Setup form */}
+        {inSetup && (
+          <section className="panel">
+            <div className="panel-header">▶ Round Setup</div>
+            <div className="panel-body">
+              <div className="setup-grid">
+                <label>
+                  <span>Scenario</span>
+                  <select
+                    value={settings.scenario}
+                    onChange={(e) => updateSetting('scenario', e.target.value)}
+                  >
+                    <option value="1">Stable bandwidth</option>
+                    <option value="2">Bursty traffic</option>
+                    <option value="3">Oscillating network</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Round Length</span>
+                  <input
+                    type="number"
+                    min="10"
+                    max="300"
+                    value={settings.maxTicks}
+                    onChange={(e) => updateSetting('maxTicks', e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Buffer Size</span>
+                  <input
+                    type="number"
+                    min="10"
+                    max="200"
+                    value={settings.bufferSize}
+                    onChange={(e) => updateSetting('bufferSize', e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Initial Rate</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="80"
+                    value={settings.initialRate}
+                    onChange={(e) => updateSetting('initialRate', e.target.value)}
+                  />
+                </label>
+              </div>
+              <button className="cf-btn primary" onClick={startGame} style={{ marginTop: 12 }}>
+                ▶ Start Game
+              </button>
             </div>
           </section>
-        </section>
+        )}
 
-        <section className="control-panel" id="controls">
-          <div className="panel-header dark">▶ Controls</div>
+        {/* Running panels */}
+        {inRun && (
+          <>
+            <section className="panel">
+              <div className="panel-header grey">Round Progress</div>
+              <div className="panel-body compact">
+                <div className="progress-copy">
+                  Tick {game.tick} of {settings.maxTicks} ({progress}%)
+                </div>
+                <div className="tick-progress-wrap">
+                  <div className="tick-progress-fill" style={{ width: `${progress}%` }} />
+                  <div className="tick-progress-label">
+                    {game.tick}/{settings.maxTicks}
+                  </div>
+                </div>
+              </div>
+            </section>
 
-          <div className="control-row">
-            <span className="row-label">Simulation:</span>
+            <section className="game-grid">
+              {/* metrics */}
+              <aside className="game-column metrics-column">
+                <div className="panel-header">▶ Live Metrics</div>
+                <table className="cf-table">
+                  <thead>
+                    <tr><th>Metric</th><th className="right">Value</th><th>Status</th></tr>
+                  </thead>
+                  <tbody>
+                    {metrics.map(([l, v, s]) => (
+                      <tr key={l}>
+                        <td>{l}</td>
+                        <td className="value-cell">{v}</td>
+                        <td className={statusToClass(s)}>{s}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </aside>
 
-            <button className="cf-btn primary" onClick={game.active ? advanceTick : startGame}>
-              {game.active ? '▶ Send Tick' : '▶ Start Game'}
-            </button>
+              {/* visualizer col */}
+              <section className="game-column visualizer-column" id="visualizer">
+                <div className="panel-header">▶ History & Packet Window</div>
+                <div className="legend-row">
+                  <span><i className="legend-swatch swatch-throughput" /> TP</span>
+                  <span><i className="legend-swatch swatch-loss" /> Loss</span>
+                  <span><i className="legend-swatch swatch-latency" /> Lat</span>
+                  <span><i className="legend-swatch swatch-score" /> Δ</span>
+                  <span><i className="legend-swatch swatch-aimd" /> Ghost</span>
+                </div>
+                <div className="canvas-frame">
+                  <HistoryCanvas game={game} />
+                </div>
+                <PacketGrid packets={game.packets} playerRate={game.playerRate} />
+              </section>
+            </section>
 
-            <button
-              className={`cf-btn ${autoRunning ? 'btn-auto-active' : ''}`}
-              onClick={() => game.active && setAutoRunning((value) => !value)}
-              disabled={!game.active}
-            >
-              {autoRunning ? '⏸ Pause' : '▶ Auto-Play'}
-            </button>
+            {/* control panel */}
+            <section className="control-panel" id="controls">
+              <div className="panel-header dark">▶ Controls</div>
 
-            <button className="cf-btn danger" onClick={stopGame} disabled={!game.active}>
-              ■ End Round
-            </button>
+              <div className="control-row">
+                <span className="row-label">Simulation:</span>
+                <button className="cf-btn primary" onClick={tickOnce}>
+                  ▶ Tick
+                </button>
+                <button
+                  className={`cf-btn ${auto ? 'btn-auto-active' : ''}`}
+                  onClick={() => inRun && setAuto((v) => !v)}
+                >
+                  {auto ? '⏸ Pause' : '▶ Auto-Play'}
+                </button>
+                <button className="cf-btn danger" onClick={endGame}>
+                  ■ End Round
+                </button>
+                <span className="inline-label">Speed:</span>
+                <select
+                  className="speed-select"
+                  value={speed}
+                  onChange={(e) => setSpeed(Number(e.target.value))}
+                >
+                  {SPEED_OPTIONS.map(([v, l]) => (
+                    <option value={v} key={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
 
-            <span className="inline-label">Speed:</span>
+              <div className="control-row delta-row">
+                <span className="row-label">Acceleration:</span>
+                <input
+                  className="delta-slider"
+                  type="range"
+                  min="-10"
+                  max="10"
+                  step="1"
+                  value={rateDelta}
+                  onChange={(e) => setRateDelta(Number(e.target.value))}
+                />
+                <span className="delta-value">{rateDeltaLabel(rateDelta)}</span>
+                <button className="cf-btn" onClick={() => setRateDelta(0)}>Reset</button>
+              </div>
 
-            <select
-              className="speed-select"
-              value={speed}
-              onChange={(event) => setSpeed(Number(event.target.value))}
-            >
-              {SPEED_OPTIONS.map(([value, label]) => (
-                <option value={value} key={value}>{label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="control-row delta-row">
-            <span className="row-label">Acceleration:</span>
-
-            <input
-              className="delta-slider"
-              type="range"
-              min="-10"
-              max="10"
-              step="1"
-              value={rateDelta}
-              onChange={(event) => setRateDelta(Number(event.target.value))}
-            />
-
-            <span className="delta-value">{getRateDeltaLabel(rateDelta)}</span>
-
-            <button className="cf-btn" onClick={() => setRateDelta(0)}>
-              Reset
-            </button>
-          </div>
-
-          <div className="delta-scale">
-            <span>-10</span>
-            <span>0</span>
-            <span>+10</span>
-          </div>
-
-          <div className="control-row">
-            <span className="row-label">Current Sender State:</span>
-            <span className="rate-display">rate {game.playerRate}</span>
-            <span className="rate-display">score {Math.round(game.totalScore)}</span>
-            <span className={rateDelta === 0 ? 'phase-pill status-ok' : rateDelta > 0 ? 'phase-pill status-warn' : 'phase-pill status-bad'}>
-              {rateDelta === 0 ? 'Maintain' : rateDelta > 0 ? 'Accelerate' : 'Decelerate'}
-            </span>
-          </div>
-
-          <div className="keyboard-help">
-            <kbd>Enter</kbd>/<kbd>Space</kbd> tick · <kbd>←</kbd>/<kbd>↓</kbd> lower delta · <kbd>→</kbd>/<kbd>↑</kbd> raise delta
-          </div>
-        </section>
-
-        <section className="panel" id="algorithm">
-          <div className="panel-header grey">▶ Algorithm Reference</div>
-
-          <div className="panel-body">
-            <table className="cf-table">
-              <tbody>
-                <tr>
-                  <td className="concept-cell">Rate delta</td>
-                  <td>Every tick applies <code>rate = clamp(rate + delta, 1, 80)</code>. Zero means hold the current send rate.</td>
-                </tr>
-                <tr>
-                  <td className="concept-cell">Overflow policy</td>
-                  <td>Tail-drop overflow assigns drops proportionally between player traffic and background traffic.</td>
-                </tr>
-                <tr>
-                  <td className="concept-cell">Loss rate</td>
-                  <td>Rolling 20-tick window: dropped player packets divided by sent player packets.</td>
-                </tr>
-                <tr>
-                  <td className="concept-cell">Scoring</td>
-                  <td><code>+1 × delivered − 4 × dropped + utilization bonus</code>.</td>
-                </tr>
-                <tr>
-                  <td className="concept-cell">AIMD ghost</td>
-                  <td>Reference controller halves on congestion and increases by one when clear.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
+              <div className="delta-scale">
+                <span>-10</span><span>0</span><span>+10</span>
+              </div>
+            </section>
+          </>
+        )}
       </main>
 
-      <footer className="site-footer">
-        TCP Congestion Control Game · React Frontend Migration
-      </footer>
+      <footer className="site-footer">TCP Congestion Control Game · React build</footer>
+
+      {inFinish && <ResultsOverlay game={game} onReset={resetToSetup} />}
     </div>
   );
 }
