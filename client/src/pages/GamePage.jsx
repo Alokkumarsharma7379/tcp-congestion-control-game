@@ -2,8 +2,10 @@
     Nothing was removed—only the outer BrowserRouter wrapper is gone. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
+import { submitGameSession } from '../api/gameApi';
+import { useAuth } from '../context/AuthContext';
 import '../styles/codeforces.css';
 
 /* ━━━━━━━━━━ CONSTANTS ━━━━━━━━━━ */
@@ -78,6 +80,7 @@ const createInitialGame = (settings, phase) => ({
   phase,
   tick: 0,
   playerRate: settings.initialRate,
+  peakRate: settings.initialRate,
   playerQueue: 0,
   otherQueue: 0,
   totalScore: 0,
@@ -163,6 +166,7 @@ function simulateTick(prev, settings, delta) {
     phase: t >= settings.maxTicks ? PHASE.FINISHED : PHASE.RUNNING,
     tick: t,
     playerRate,
+    peakRate: Math.max(prev.peakRate, playerRate),
     playerQueue: playerQ,
     otherQueue: otherQ,
     totalScore: prev.totalScore + scoreΔ,
@@ -287,7 +291,7 @@ function HistoryCanvas({ game }) {
   return <canvas ref={ref} className="history-canvas" />;
 }
 
-function ResultsOverlay({ game, onReset }) {
+function ResultsOverlay({ game, onReset, saveState }) {
   const lossRate = game.totalSent ? game.totalDropped / game.totalSent : 0;
   const efficiency = game.totalSent ? game.totalDelivered / game.totalSent : 0;
   const [tier, tierClass] = tierFromScore(game.totalScore);
@@ -309,6 +313,33 @@ function ResultsOverlay({ game, onReset }) {
             <tr><td className="result-label">Rating Tier</td><td className={`result-value ${tierClass}`}>{tier}</td></tr>
           </tbody>
         </table>
+
+        <div className="save-status-row">
+          {saveState.status === 'saving' && (
+            <p className="muted-text">Saving your score...</p>
+          )}
+
+          {saveState.status === 'saved' && saveState.rating && (
+            <p className="status-ok">
+              ✓ Score saved — rating {saveState.rating.previousRating} →{' '}
+              {saveState.rating.newRating} (
+              {saveState.rating.delta >= 0 ? '+' : ''}
+              {saveState.rating.delta})
+            </p>
+          )}
+
+          {saveState.status === 'error' && (
+            <p className="form-error">{saveState.error}</p>
+          )}
+
+          {saveState.status === 'guest' && (
+            <p className="muted-text">
+              <Link to="/login">Login</Link> to save this score to your profile
+              and appear on the leaderboard.
+            </p>
+          )}
+        </div>
+
         <button className="cf-btn primary play-again-btn" onClick={onReset}>Play Again</button>
       </div>
     </div>
@@ -319,6 +350,7 @@ function ResultsOverlay({ game, onReset }) {
 
 function GamePage() {
   const navigate = useNavigate();
+  const { isAuthenticated, refreshProfile } = useAuth();
 
   /* settings state */
   const [settings, setSettings] = useState({
@@ -333,6 +365,10 @@ function GamePage() {
   const [rateDelta, setRateDelta] = useState(0);
   const [auto, setAuto] = useState(false);
   const [speed, setSpeed] = useState(400);
+  const [saveState, setSaveState] = useState({ status: 'idle', rating: null, error: '' });
+
+  const submittedRef = useRef(false);
+  const startTimeRef = useRef(null);
 
   const progress = Math.round((game.tick / settings.maxTicks) * 100);
   const result = game.lastResult;
@@ -366,6 +402,8 @@ function GamePage() {
     setRateDelta(0);
     setAuto(false);
     setGame(createInitialGame(settings, PHASE.SETUP));
+    submittedRef.current = false;
+    setSaveState({ status: 'idle', rating: null, error: '' });
     window.scrollTo({ top: 0 });
   };
 
@@ -379,6 +417,9 @@ function GamePage() {
     setSettings(safe);
     setRateDelta(0);
     setAuto(false);
+    submittedRef.current = false;
+    setSaveState({ status: 'idle', rating: null, error: '' });
+    startTimeRef.current = Date.now();
     setGame(createInitialGame(safe, PHASE.RUNNING));
   };
 
@@ -388,6 +429,50 @@ function GamePage() {
     () => setGame((g) => simulateTick(g, settings, rateDelta)),
     [rateDelta, settings]
   );
+
+  /* submit the finished round to the backend so rating/streak/heatmap update */
+  useEffect(() => {
+    if (game.phase !== PHASE.FINISHED || submittedRef.current) return;
+    submittedRef.current = true;
+
+    if (!isAuthenticated) {
+      setSaveState({ status: 'guest', rating: null, error: '' });
+      return;
+    }
+
+    const durationInSeconds = startTimeRef.current
+      ? Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000))
+      : Math.max(1, game.tick);
+
+    setSaveState({ status: 'saving', rating: null, error: '' });
+
+    submitGameSession({
+      gameType: 'TCP_CONGESTION',
+      score: Math.max(0, Math.round(game.totalScore)),
+      peakWindowSize: Math.round(game.peakRate),
+      timeoutsCount: game.congestionEvents,
+      durationInSeconds
+    })
+      .then((response) => {
+        setSaveState({ status: 'saved', rating: response.data.rating, error: '' });
+        refreshProfile().catch(() => {});
+      })
+      .catch((error) => {
+        setSaveState({
+          status: 'error',
+          rating: null,
+          error: error.message || 'Failed to save this score. Please try again.'
+        });
+      });
+  }, [
+    game.phase,
+    game.totalScore,
+    game.peakRate,
+    game.congestionEvents,
+    game.tick,
+    isAuthenticated,
+    refreshProfile
+  ]);
 
   /* timers & shortcuts */
   useEffect(() => {
@@ -540,7 +625,7 @@ function GamePage() {
       )}
 
       {/* FINISHED */}
-      {inFinish && <ResultsOverlay game={game} onReset={reset} />}
+      {inFinish && <ResultsOverlay game={game} onReset={reset} saveState={saveState} />}
     </>
   );
 }
