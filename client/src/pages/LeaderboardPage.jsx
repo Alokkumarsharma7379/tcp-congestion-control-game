@@ -1,7 +1,10 @@
+// top of file
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { getGlobalLeaderboard } from '../api/leaderboardApi';
 import '../styles/codeforces.css';
+
 
 function LeaderboardPage() {
   const [rankings, setRankings] = useState([]);
@@ -66,7 +69,7 @@ function LeaderboardPage() {
                 {rankings.map((entry, index) => (
                   <tr key={entry.userId || entry.username}>
                     <td>{index + 1}</td>
-                    <td>{entry.username}</td>
+                    <td><Link to={`/u/${entry.username}`}>{entry.username}</Link></td>
                     <td>{entry.fullName || '—'}</td>
                     <td className="value-cell">{entry.rating}</td>
                     <td>{entry.rank}</td>

@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 import { getGameHistory } from '../api/gameApi';
 import { uploadAvatar } from '../api/userApi';
 import { useAuth } from '../context/AuthContext';
+import RatingBadge from '../components/ui/RatingBadge';
 import {
   getInitials,
   isWithinLastDays,
@@ -89,6 +90,7 @@ function DashboardPage() {
 
   const account = profile?.user || user;
   const heatmap = profile?.heatmap || [];
+  const ratingHistory = profile?.ratingHistory || [];
 
   const last30 = heatmap.filter((row) => isWithinLastDays(row.date, 30));
   const last365 = heatmap.filter((row) => isWithinLastDays(row.date, 365));
@@ -130,6 +132,7 @@ function DashboardPage() {
     account,
     profile,
     heatmap,
+    ratingHistory,
     summary,
     sessions,
     friendCount,
@@ -159,7 +162,7 @@ function DashboardPage() {
 
             <div className="cf-mini-profile">
               <div>
-                <p>Rating: <b>{account.rating}</b></p>
+                <p><RatingBadge rank={account.rank} rating={account.rating} /></p>
                 <p>Contribution: <b>{account.contribution || 0}</b></p>
 
                 <ul>
@@ -171,6 +174,10 @@ function DashboardPage() {
                     </li>
                   ))}
                 </ul>
+
+                <p style={{ marginTop: 8 }}>
+                  <Link to={`/u/${account.username}`}>View public profile ↗</Link>
+                </p>
               </div>
 
               <div className="cf-mini-avatar">

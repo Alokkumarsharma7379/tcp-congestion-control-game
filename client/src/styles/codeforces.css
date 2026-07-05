@@ -906,32 +906,85 @@ kbd {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(130px, 1fr));
-  gap: 10px;
-  margin-bottom: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
 }
 
 .stat-card {
-  border: 1px solid #c0c0c0;
-  background: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow-soft);
+  border-left: 4px solid var(--brand-accent);
 }
 
-.stat-card span {
-  display: block;
-  border-bottom: 1px solid #c0c0c0;
-  background: #d6eaf8;
-  color: #1a5276;
-  font-size: 11px;
-  font-weight: bold;
-  padding: 5px 8px;
+.stat-card-icon {
+  font-size: 22px;
+  line-height: 1;
 }
 
-.stat-card strong {
-  display: block;
+.stat-card-value {
   font-family: "Courier New", Courier, monospace;
-  font-size: 18px;
-  padding: 10px 8px;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.1;
 }
+
+.stat-card-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.stat-card-hint {
+  color: #8a93a6;
+  font-size: 11px;
+}
+
+.stat-card-blue { border-left-color: #2e86c1; }
+.stat-card-teal { border-left-color: #03a89e; }
+.stat-card-orange { border-left-color: #e67e22; }
+.stat-card-purple { border-left-color: #8e44ad; }
+.stat-card-green { border-left-color: #27ae60; }
+.stat-card-red { border-left-color: #c0392b; }
+
+/* Rating badge */
+
+.rating-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  border: 1px solid transparent;
+}
+
+.rating-badge-sm {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.rating-badge-value {
+  font-family: "Courier New", Courier, monospace;
+}
+
+.rank-newbie { background: #eef1f3; color: #6b7280; }
+.rank-pupil { background: #e3f6e8; color: #1a8a3c; }
+.rank-specialist { background: #e1f6f6; color: #03a89e; }
+.rank-expert { background: #e3edfb; color: #1a5276; }
+.rank-master { background: #f3e8fb; color: #7d3c98; }
+.rank-im { background: #fdf0e1; color: #b9640a; }
+.rank-gm { background: #fbe4e1; color: #c0392b; }
 
 .muted-text {
   color: #777;
@@ -1508,4 +1561,56 @@ kbd {
   .cf-detail-list {
     font-size: 15px;
   }
+}
+
+
+/* Public user profile page (/u/:username) */
+
+.public-profile-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.friend-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--brand-accent);
+  background: #ffffff;
+  color: var(--brand-accent-dark);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.friend-toggle-btn:hover {
+  background: #e1f6f6;
+}
+
+.friend-toggle-btn.is-friend {
+  background: var(--brand-accent);
+  color: #ffffff;
+}
+
+.friend-toggle-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.friend-star {
+  font-size: 15px;
+}
+
+.save-status-row {
+  margin: 10px 0;
+  min-height: 18px;
+}
+
+.save-status-row p {
+  margin: 0;
+  font-size: 12px;
 }

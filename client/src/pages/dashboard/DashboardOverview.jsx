@@ -2,6 +2,7 @@ import { useOutletContext } from 'react-router-dom';
 
 import HeatmapGrid from '../../components/ui/HeatmapGrid';
 import RatingGraph from '../../components/ui/RatingGraph';
+import StatCard from '../../components/ui/StatCard';
 import {
   buildRatingHistoryFromSessions,
   formatDate,
@@ -12,9 +13,8 @@ import {
 function DashboardOverview() {
   const {
     account,
-    profile,
     heatmap,
-    summary,
+    ratingHistory,
     sessions,
     friendCount,
     uploading,
@@ -22,9 +22,9 @@ function DashboardOverview() {
     handleAvatarChange
   } = useOutletContext();
 
-  const ratingHistory =
-    profile?.ratingHistory?.length > 0
-      ? profile.ratingHistory
+  const chartData =
+    ratingHistory.length > 0
+      ? ratingHistory
       : buildRatingHistoryFromSessions(sessions);
 
   return (
@@ -42,59 +42,6 @@ function DashboardOverview() {
               </>
             ) : null}
           </p>
-
-          <div className="cf-detail-list">
-            <div>
-              <span className="cf-icon">📈</span>
-              <strong>Contest rating:</strong>
-              <b className="cf-rating-value">{account.rating}</b>
-              <span> max. {account.rank?.toLowerCase()}, {account.rating}</span>
-            </div>
-
-            <div>
-              <span className="cf-icon">⭐</span>
-              <strong>Contribution:</strong>
-              <b>{account.contribution || 0}</b>
-            </div>
-
-            <div>
-              <span className="cf-icon">🤝</span>
-              <strong>Friend of:</strong>
-              <b>{friendCount}</b>
-              <span> users</span>
-            </div>
-
-            <div>
-              <span className="cf-icon">🔥</span>
-              <strong>Current streak:</strong>
-              <b>{account.currentStreak || 0}</b>
-              <span> days</span>
-            </div>
-
-            <div>
-              <span className="cf-icon">📅</span>
-              <strong>Games this month:</strong>
-              <b>{account.gamesPlayedThisMonth || 0}</b>
-            </div>
-
-            <div>
-              <span className="cf-icon">✉️</span>
-              <strong>Email:</strong>
-              <span>{account.email} (not visible)</span>
-            </div>
-
-            <div>
-              <span className="cf-icon">🟢</span>
-              <strong>Last visit:</strong>
-              <span>{formatDate(account.lastVisit)}</span>
-            </div>
-
-            <div>
-              <span className="cf-icon">📝</span>
-              <strong>Registered:</strong>
-              <span>{formatShortDate(account.createdAt)}</span>
-            </div>
-          </div>
         </div>
 
         <div className="cf-avatar-panel">
@@ -122,10 +69,58 @@ function DashboardOverview() {
         </div>
       </section>
 
+      <div className="dashboard-grid">
+        <StatCard
+          icon="📈"
+          label="Contest Rating"
+          value={account.rating}
+          hint={account.rank}
+          accent="blue"
+        />
+        <StatCard
+          icon="⭐"
+          label="Contribution"
+          value={account.contribution || 0}
+          accent="orange"
+        />
+        <StatCard
+          icon="🤝"
+          label="Friends"
+          value={friendCount}
+          accent="purple"
+        />
+        <StatCard
+          icon="🔥"
+          label="Current Streak"
+          value={`${account.currentStreak || 0}d`}
+          hint={`Best: ${account.maxYearlyStreak || 0}d`}
+          accent="red"
+        />
+        <StatCard
+          icon="🎮"
+          label="Games This Month"
+          value={account.gamesPlayedThisMonth || 0}
+          accent="teal"
+        />
+        <StatCard
+          icon="🟢"
+          label="Last Visit"
+          value={formatShortDate(account.lastVisit)}
+          hint={formatDate(account.lastVisit)}
+          accent="green"
+        />
+        <StatCard
+          icon="📝"
+          label="Registered"
+          value={formatShortDate(account.createdAt)}
+          accent="blue"
+        />
+      </div>
+
       <section className="panel elevated-panel">
         <div className="panel-header">▶ Rating Progress</div>
         <div className="panel-body">
-          <RatingGraph data={ratingHistory} />
+          <RatingGraph data={chartData} />
         </div>
       </section>
 
@@ -133,38 +128,6 @@ function DashboardOverview() {
         <div className="panel-header">▶ Activity Heatmap</div>
         <div className="panel-body">
           <HeatmapGrid entries={heatmap} />
-        </div>
-      </section>
-
-      <section className="cf-summary-row">
-        <div>
-          <strong>{summary.allTimeGames}</strong>
-          <span>games played all time</span>
-        </div>
-
-        <div>
-          <strong>{summary.yearlyGames}</strong>
-          <span>games played in the last year</span>
-        </div>
-
-        <div>
-          <strong>{summary.monthlyGames}</strong>
-          <span>games played in the last month</span>
-        </div>
-
-        <div>
-          <strong>{summary.activeDaysAllTime}</strong>
-          <span>active days all time</span>
-        </div>
-
-        <div>
-          <strong>{summary.activeDaysYear}</strong>
-          <span>active days in the last year</span>
-        </div>
-
-        <div>
-          <strong>{summary.activeDaysMonth}</strong>
-          <span>active days in the last month</span>
         </div>
       </section>
     </>

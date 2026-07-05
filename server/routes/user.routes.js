@@ -1,22 +1,27 @@
 import { Router } from 'express';
 
-import { protect } from '../middleware/auth.middleware.js';
+import { protect, optionalAuth } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/upload.middleware.js';
 
 import {
   getProfile,
-  addFriend,
+  getPublicProfileByUsername,
+  toggleFriend,
   updateAvatar
 } from '../controllers/user.controller.js';
 
 const userRouter = Router();
 
-userRouter.use(protect);
+// Authenticated-only routes for the logged-in user's own account.
+userRouter.get('/profile', protect, getProfile);
+userRouter.post('/avatar', protect, upload.single('avatar'), updateAvatar);
 
-userRouter.get('/profile', getProfile);
-userRouter.post('/avatar', upload.single('avatar'), updateAvatar);
+userRouter.post('/friends/add', protect, toggleFriend);
+userRouter.post('/friends/:friendId', protect, toggleFriend);
 
-userRouter.post('/friends/add', addFriend);
-userRouter.post('/friends/:friendId', addFriend);
+// Public profile lookup — optionalAuth so we can flag `isFriend` when the
+// viewer happens to be logged in, without requiring it to view a profile.
+// Registered last so it never shadows the literal routes above.
+userRouter.get('/:username', optionalAuth, getPublicProfileByUsername);
 
 export default userRouter;

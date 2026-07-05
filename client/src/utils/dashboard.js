@@ -64,6 +64,18 @@ const GAME_LABELS = {
 
 const getGameLabel = (gameType) => GAME_LABELS[gameType] || gameType || 'Unknown game';
 
+const RANK_CLASS_MAP = {
+  Newbie: 'rank-newbie',
+  Pupil: 'rank-pupil',
+  Specialist: 'rank-specialist',
+  Expert: 'rank-expert',
+  Master: 'rank-master',
+  'International Master': 'rank-im',
+  Grandmaster: 'rank-gm'
+};
+
+const getRankClassName = (rank) => RANK_CLASS_MAP[rank] || 'rank-newbie';
+
 export {
   getInitials,
   formatDate,
@@ -71,5 +83,6 @@ export {
   isWithinLastDays,
   sumCounts,
   buildRatingHistoryFromSessions,
-  getGameLabel
+  getGameLabel,
+  getRankClassName
 };

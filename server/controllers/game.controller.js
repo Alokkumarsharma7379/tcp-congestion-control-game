@@ -94,31 +94,39 @@ const submitScore = async (req, res, next) => {
       });
     }
 
+    const validScore = toPositiveNumber(score, 'score');
+    const validPeakWindowSize = toPositiveNumber(peakWindowSize, 'peakWindowSize');
+    const validTimeoutsCount = toPositiveNumber(timeoutsCount, 'timeoutsCount');
+    const validDurationInSeconds = toPositiveNumber(
+      durationInSeconds,
+      'durationInSeconds',
+      { allowZero: false }
+    );
+
+    const ratingResult = calculateNewRating(
+      req.user.rating,
+      validScore,
+      {
+        peakWindowSize: validPeakWindowSize,
+        timeoutsCount: validTimeoutsCount,
+        durationInSeconds: validDurationInSeconds
+      }
+    );
+
     const sessionPayload = {
       userId: req.user._id,
       gameType,
-      score: toPositiveNumber(score, 'score'),
-      peakWindowSize: toPositiveNumber(peakWindowSize, 'peakWindowSize'),
-      timeoutsCount: toPositiveNumber(timeoutsCount, 'timeoutsCount'),
-      durationInSeconds: toPositiveNumber(
-        durationInSeconds,
-        'durationInSeconds',
-        { allowZero: false }
-      ),
+      score: validScore,
+      peakWindowSize: validPeakWindowSize,
+      timeoutsCount: validTimeoutsCount,
+      durationInSeconds: validDurationInSeconds,
+      ratingBefore: ratingResult.previousRating,
+      ratingAfter: ratingResult.newRating,
+      ratingDelta: ratingResult.ratingDelta,
       playedAt: new Date()
     };
 
     const savedSession = await GameSession.create(sessionPayload);
-
-    const ratingResult = calculateNewRating(
-      req.user.rating,
-      sessionPayload.score,
-      {
-        peakWindowSize: sessionPayload.peakWindowSize,
-        timeoutsCount: sessionPayload.timeoutsCount,
-        durationInSeconds: sessionPayload.durationInSeconds
-      }
-    );
 
     const streakUpdate = calculateStreakUpdate(
       req.user,

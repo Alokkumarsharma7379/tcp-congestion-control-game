@@ -4,10 +4,13 @@ const getProfile = () => {
   return apiRequest('/users/profile');
 };
 
-const addFriend = (friendId) => {
-  return apiRequest('/users/friends/add', {
-    method: 'POST',
-    body: { friendId }
+const getPublicProfile = (username) => {
+  return apiRequest(`/users/${encodeURIComponent(username)}`);
+};
+
+const toggleFriend = (friendId) => {
+  return apiRequest(`/users/friends/${friendId}`, {
+    method: 'POST'
   });
 };
 
@@ -21,4 +24,4 @@ const uploadAvatar = (file) => {
   });
 };
 
-export { getProfile, addFriend, uploadAvatar };
+export { getProfile, getPublicProfile, toggleFriend, uploadAvatar };

@@ -44,6 +44,22 @@ const gameSessionSchema = new Schema(
       min: [0, 'Duration cannot be negative.']
     },
 
+    ratingBefore: {
+  type: Number,
+  default: null
+},
+
+ratingAfter: {
+  type: Number,
+  default: null,
+  index: true
+},
+
+ratingDelta: {
+  type: Number,
+  default: null
+},
+
     playedAt: {
       type: Date,
       default: Date.now,
