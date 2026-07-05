@@ -1049,14 +1049,21 @@ kbd {
   text-transform: uppercase;
 }
 
-.cf-profile-tabs span {
-  cursor: default;
+.cf-profile-tabs a {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.cf-profile-tabs a:hover {
+  text-decoration: underline;
 }
 
 .cf-profile-tabs .active {
   background: #d5d5d5;
   border-radius: 3px;
   padding: 4px 7px;
+  text-decoration: none;
 }
 
 .cf-profile-layout {
@@ -1233,6 +1240,86 @@ kbd {
   margin: 10px 0 0 18px;
   padding: 0;
   font-size: 14px;
+}
+
+.cf-mini-profile ul a {
+  color: #0000cc;
+  text-decoration: none;
+}
+
+.cf-mini-profile ul a:hover {
+  text-decoration: underline;
+}
+
+.cf-mini-profile ul a.active {
+  color: #222;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.cf-coming-soon {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  padding: 30px 20px;
+  text-align: center;
+  color: #596273;
+}
+
+.cf-coming-soon-badge {
+  background: #eef3ff;
+  color: #2f5597;
+  border: 1px solid #c7d4ef;
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.cf-settings-list {
+  display: grid;
+  gap: 10px;
+}
+
+.cf-settings-list div {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed #d8d8d8;
+  padding-bottom: 8px;
+  font-size: 14px;
+}
+
+.cf-games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.cf-game-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  border: 1px solid #bcbcbc;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.cf-game-card.disabled {
+  opacity: 0.6;
+}
+
+.cf-game-card h4 {
+  margin: 0;
+  color: #03a89e;
+}
+
+.cf-game-card p {
+  margin: 0;
+  color: #596273;
+  font-size: 13px;
 }
 
 .cf-mini-avatar {
