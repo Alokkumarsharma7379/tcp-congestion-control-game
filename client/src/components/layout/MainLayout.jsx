@@ -17,7 +17,9 @@ function MainLayout() {
         {!isGamePage && <Sidebar />}
 
         <div className="app-main">
-          <Outlet />
+          <div className="page-content-wrap">
+            <Outlet />
+          </div>
           {!isGamePage && <Footer />}
         </div>
       </div>

@@ -328,6 +328,12 @@ html, body, #root {
   flex: 1 1 auto;
   min-width: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-content-wrap {
+  flex: 1 0 auto;
 }
 
 .game-shell .app-sidebar {
