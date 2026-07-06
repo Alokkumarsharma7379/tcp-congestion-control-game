@@ -586,13 +586,22 @@ function GamePage() {
             {/* visualizer */}
             <section className="game-column visualizer-column" id="visualizer">
               <div className="panel-header">▶ History & Packet Window</div>
+
               <div className="legend-row">
-                <span><i className="legend-swatch swatch-throughput" /> TP</span>
-                <span><i className="legend-swatch swatch-loss" /> Loss</span>
-                <span><i className="legend-swatch swatch-latency" /> Lat</span>
-                <span><i className="legend-swatch swatch-score" /> Δ</span>
-                <span><i className="legend-swatch swatch-aimd" /> Ghost</span>
+                <span><i className="legend-swatch swatch-throughput" /> TP — Throughput (delivered ÷ sent, higher is better)</span>
+                <span><i className="legend-swatch swatch-loss" /> Loss — packets dropped in the last 20 ticks</span>
+                <span><i className="legend-swatch swatch-latency" /> Lat — queue delay, normalized 0–1</span>
+                <span><i className="legend-swatch swatch-score" /> Δ — score earned this tick</span>
+                <span><i className="legend-swatch swatch-aimd" /> Ghost — AIMD reference rate</span>
               </div>
+
+              <p className="chart-tutorial">
+                All 5 lines share one 0–1 scale so you can compare them at a glance. Watch for
+                <strong> TP dropping</strong> while <strong>Loss rises</strong> — that's congestion.
+                If <strong>Ghost</strong> sits above your rate, you can safely speed up; if it's
+                below, you're pushing too hard.
+              </p>
+
               <div className="canvas-frame"><HistoryCanvas game={game} /></div>
               <PacketGrid packets={game.packets} playerRate={game.playerRate} />
             </section>
