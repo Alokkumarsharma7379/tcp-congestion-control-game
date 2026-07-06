@@ -1,4 +1,4 @@
-const DAY_NAMES = ['Mon', '', 'Wed', '', 'Fri', '', ''];
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thr', 'Fri', 'Sat', 'Sun'];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const toKey = (date) => {
