@@ -38,6 +38,12 @@ const gameSessionSchema = new Schema(
       min: 0
     },
 
+    totalSent: { type: Number, default: 0, min: 0 },
+    totalDelivered: { type: Number, default: 0, min: 0 },
+    totalDropped: { type: Number, default: 0, min: 0 },
+    totalBandwidthAvailable: { type: Number, default: 0, min: 0 },
+    ticks: { type: Number, default: 0, min: 0 },
+
     durationInSeconds: {
       type: Number,
       required: [true, 'Duration is required.'],

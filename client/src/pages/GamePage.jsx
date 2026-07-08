@@ -87,6 +87,7 @@ const createInitialGame = (settings, phase) => ({
   totalDelivered: 0,
   totalDropped: 0,
   totalSent: 0,
+  totalBandwidth:0,
   congestionEvents: 0,
   aimdRate: settings.initialRate,
   sentWindow: [],
@@ -172,7 +173,9 @@ function simulateTick(prev, settings, delta) {
     totalScore: prev.totalScore + scoreΔ,
     totalDelivered: prev.totalDelivered + pDel,
     totalDropped: prev.totalDropped + pDrop,
+    // simulateTick's return value
     totalSent: prev.totalSent + pArr,
+    totalBandwidth: prev.totalBandwidth + bw,
     congestionEvents: prev.congestionEvents + (congestion ? 1 : 0),
     aimdRate,
     sentWindow,
@@ -446,13 +449,19 @@ function GamePage() {
 
     setSaveState({ status: 'saving', rating: null, error: '' });
 
-    submitGameSession({
-      gameType: 'TCP_CONGESTION',
-      score: Math.max(0, Math.round(game.totalScore)),
-      peakWindowSize: Math.round(game.peakRate),
-      timeoutsCount: game.congestionEvents,
-      durationInSeconds
-    })
+    // the submission call
+      submitGameSession({
+        gameType: 'TCP_CONGESTION',
+        score: Math.max(0, Math.round(game.totalScore)),
+        peakWindowSize: Math.round(game.peakRate),
+        timeoutsCount: game.congestionEvents,
+        totalSent: game.totalSent,
+        totalDelivered: game.totalDelivered,
+        totalDropped: game.totalDropped,
+        totalBandwidthAvailable: Math.round(game.totalBandwidth),
+        ticks: game.tick,
+        durationInSeconds
+      })
       .then((response) => {
         setSaveState({ status: 'saved', rating: response.data.rating, error: '' });
         refreshProfile().catch(() => {});
@@ -464,16 +473,20 @@ function GamePage() {
           error: error.message || 'Failed to save this score. Please try again.'
         });
       });
-  }, [
-    game.phase,
-    game.totalScore,
-    game.peakRate,
-    game.congestionEvents,
-    game.tick,
-    isAuthenticated,
-    refreshProfile
-  ]);
-
+  // the effect's dependency array
+    }, [
+      game.phase,
+      game.totalScore,
+      game.peakRate,
+      game.congestionEvents,
+      game.totalSent,
+      game.totalDelivered,
+      game.totalDropped,
+      game.totalBandwidth,
+      game.tick,
+      isAuthenticated,
+      refreshProfile
+    ]);
   /* timers & shortcuts */
   useEffect(() => {
     if (game.phase !== PHASE.RUNNING || !auto) return;

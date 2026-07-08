@@ -27,9 +27,12 @@ const normalizeError = (error) => {
     return handleJwtExpiredError();
   }
 
+  // Anything else is a bug, not a client mistake — never forward its raw
+// message (e.g. "X is not defined") to the browser. Log it server-side
+// for debugging and show a generic message instead.
   return new ApiError({
     statusCode: error.statusCode || error.status || 500,
-    message: error.message || 'Internal server error.',
+    message: 'Something went wrong on our end. Please try again.',
     error: null,
     isOperational: false
   });

@@ -84,6 +84,11 @@ const submitScore = async (req, res, next) => {
       score,
       peakWindowSize = 0,
       timeoutsCount = 0,
+      totalSent = 0,
+      totalDelivered = 0,
+      totalDropped = 0,
+      totalBandwidthAvailable = 0,
+      ticks = 0,
       durationInSeconds
     } = req.body;
 
@@ -97,6 +102,14 @@ const submitScore = async (req, res, next) => {
     const validScore = toPositiveNumber(score, 'score');
     const validPeakWindowSize = toPositiveNumber(peakWindowSize, 'peakWindowSize');
     const validTimeoutsCount = toPositiveNumber(timeoutsCount, 'timeoutsCount');
+    const validTotalSent = toPositiveNumber(totalSent, 'totalSent');
+    const validTotalDelivered = toPositiveNumber(totalDelivered, 'totalDelivered');
+    const validTotalDropped = toPositiveNumber(totalDropped, 'totalDropped');
+    const validTotalBandwidthAvailable = toPositiveNumber(
+      totalBandwidthAvailable,
+      'totalBandwidthAvailable'
+    );
+    const validTicks = toPositiveNumber(ticks, 'ticks');
     const validDurationInSeconds = toPositiveNumber(
       durationInSeconds,
       'durationInSeconds',
@@ -109,6 +122,10 @@ const submitScore = async (req, res, next) => {
       {
         peakWindowSize: validPeakWindowSize,
         timeoutsCount: validTimeoutsCount,
+        totalSent: validTotalSent,
+        totalDelivered: validTotalDelivered,
+        totalDropped: validTotalDropped,
+        totalBandwidthAvailable: validTotalBandwidthAvailable,
         durationInSeconds: validDurationInSeconds
       }
     );
@@ -119,6 +136,11 @@ const submitScore = async (req, res, next) => {
       score: validScore,
       peakWindowSize: validPeakWindowSize,
       timeoutsCount: validTimeoutsCount,
+      totalSent: validTotalSent,
+      totalDelivered: validTotalDelivered,
+      totalDropped: validTotalDropped,
+      totalBandwidthAvailable: validTotalBandwidthAvailable,
+      ticks: validTicks,
       durationInSeconds: validDurationInSeconds,
       ratingBefore: ratingResult.previousRating,
       ratingAfter: ratingResult.newRating,
