@@ -961,6 +961,9 @@ kbd {
 
 .results-card {
   min-width: 320px;
+  max-width: 640px;
+  max-height: 88vh;
+  overflow-y: auto;
   background: #ffffff;
   border: 3px solid #2e86c1;
   padding: 20px 26px;
@@ -1928,4 +1931,116 @@ kbd {
   font-size: 12px;
   color: #6b5a1e;
   line-height: 1.5;
+}
+
+/* Competitor selection hint on the Setup screen */
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.competitor-hint {
+  margin: 10px 0 0;
+  padding: 6px 10px;
+  background: #eef3ff;
+  border: 1px solid #c7d4ef;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #2f5597;
+}
+
+/* Game Review panel (inside the Results overlay) */
+
+.game-review {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 2px solid #e0e0e0;
+  text-align: left;
+}
+
+.game-review h4 {
+  margin: 0 0 10px;
+  color: #1a5276;
+  font-size: 14px;
+}
+
+.game-review-empty {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #f7f9fb;
+  border: 1px dashed #c7cfd8;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #667;
+  text-align: left;
+}
+
+.game-review-table {
+  margin-bottom: 12px;
+}
+
+.game-review-chart {
+  border: 1px solid #c0c0c0;
+  border-radius: 4px;
+  background: #fafafa;
+  padding: 6px;
+  margin-bottom: 12px;
+}
+
+.game-review-chart-legend {
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  color: #667;
+  margin-bottom: 6px;
+}
+
+.game-review-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.game-review-canvas {
+  width: 100%;
+  height: 140px;
+  display: block;
+}
+
+.game-review-verdicts {
+  display: grid;
+  gap: 8px;
+}
+
+.game-review-verdict {
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.game-review-verdict p {
+  margin: 4px 0 0;
+}
+
+.game-review-verdict.tone-good {
+  background: #eaf7ea;
+  border-color: #cdeccd;
+  color: #1a5c1a;
+}
+
+.game-review-verdict.tone-warn {
+  background: #fdf3e0;
+  border-color: #f5e0ad;
+  color: #7a5b0a;
+}
+
+.game-review-verdict.tone-bad {
+  background: #fce6e6;
+  border-color: #f5c2c2;
+  color: #8a1f1f;
 }

@@ -6,18 +6,21 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { submitGameSession } from '../api/gameApi';
 import { useAuth } from '../context/AuthContext';
+import {
+  PHASE,
+  REWARD,
+  DROP_PENALTY,
+  UTIL_BONUS,
+  MIN_RATE,
+  MAX_RATE,
+  COMPETITOR_OPTIONS,
+  clamp,
+  createInitialGame,
+  simulateTick
+} from '../simulation/gameEngine';
+import GameReviewPanel from '../components/ui/GameReviewPanel';
 import '../styles/codeforces.css';
 
-/* ━━━━━━━━━━ CONSTANTS ━━━━━━━━━━ */
-const REWARD = 1.0;
-const DROP_PENALTY = 4.0;
-const UTIL_BONUS = 0.5;
-const LOSS_WINDOW = 20;
-const HISTORY_LEN = 80;
-const MIN_RATE = 1;
-const MAX_RATE = 80;
-
-const PHASE = { SETUP: 'SETUP', RUNNING: 'RUNNING', FINISHED: 'FINISHED' };
 
 const SPEED_OPTIONS = [
   ['800', 'Slow'],
@@ -40,18 +43,8 @@ const PACKET_STATUS_LABEL = {
 };
 
 /* ━━━━━━━━━━ HELPERS ━━━━━━━━━━ */
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const boundedPush = (arr, v, limit) =>
-  arr.length >= limit ? [...arr.slice(1), v] : [...arr, v];
 
-const getBandwidth = (s, t) =>
-  s === 1 ? 30 : s === 2 ? 30 : 15 + 15 * Math.sin(t / 10);
 
-const getOtherTraffic = (s, t) => {
-  if (s === 1) return 15 + 10 * Math.sin(t / 5);
-  if (s === 2) return Math.random() < 0.1 ? 25 + Math.random() * 20 : 5 + Math.random() * 5;
-  return 10 + 8 * Math.sin((t + 20) / 8);
-};
 
 const tierFromScore = (score) => {
   if (score >= 150) return ['Grandmaster', 'status-bad'];
@@ -76,132 +69,132 @@ const rateDeltaLabel = (d) =>
   d === 0 ? '0 (Maintain Rate)' : d > 0 ? `+${d} (Accelerating)` : `${d} (Decelerating)`;
 
 /* ━━━━━━━━━━ SIMULATION CORE ━━━━━━━━━━ */
-const createInitialGame = (settings, phase) => ({
-  phase,
-  tick: 0,
-  playerRate: settings.initialRate,
-  peakRate: settings.initialRate,
-  playerQueue: 0,
-  otherQueue: 0,
-  totalScore: 0,
-  totalDelivered: 0,
-  totalDropped: 0,
-  totalSent: 0,
-  totalBandwidth:0,
-  congestionEvents: 0,
-  aimdRate: settings.initialRate,
-  sentWindow: [],
-  droppedWindow: [],
-  histTP: [],
-  histLoss: [],
-  histLat: [],
-  histDelta: [],
-  histAIMD: [],
-  aimdLog: [],
-  packets: [],
-  lastResult: null
-});
+// const createInitialGame = (settings, phase) => ({
+//   phase,
+//   tick: 0,
+//   playerRate: settings.initialRate,
+//   peakRate: settings.initialRate,
+//   playerQueue: 0,
+//   otherQueue: 0,
+//   totalScore: 0,
+//   totalDelivered: 0,
+//   totalDropped: 0,
+//   totalSent: 0,
+//   totalBandwidth:0,
+//   congestionEvents: 0,
+//   aimdRate: settings.initialRate,
+//   sentWindow: [],
+//   droppedWindow: [],
+//   histTP: [],
+//   histLoss: [],
+//   histLat: [],
+//   histDelta: [],
+//   histAIMD: [],
+//   aimdLog: [],
+//   packets: [],
+//   lastResult: null
+// });
 
-const buildPackets = ({ t, sent, dropped, delivered }) =>
-  Array.from({ length: sent }, (_, i) => {
-    let state = 'inFlight';
-    if (i < dropped) state = 'dropped';
-    else if (i < dropped + delivered) state = 'acked';
-    return { id: `${t}-${i}`, sequence: i + 1, state };
-  });
+// const buildPackets = ({ t, sent, dropped, delivered }) =>
+//   Array.from({ length: sent }, (_, i) => {
+//     let state = 'inFlight';
+//     if (i < dropped) state = 'dropped';
+//     else if (i < dropped + delivered) state = 'acked';
+//     return { id: `${t}-${i}`, sequence: i + 1, state };
+//   });
 
-function simulateTick(prev, settings, delta) {
-  if (prev.tick >= settings.maxTicks) return { ...prev, phase: PHASE.FINISHED };
+// function simulateTick(prev, settings, delta) {
+//   if (prev.tick >= settings.maxTicks) return { ...prev, phase: PHASE.FINISHED };
 
-  const t = prev.tick + 1;
-  const playerRate = clamp(prev.playerRate + delta, MIN_RATE, MAX_RATE);
-  const bw = Math.round(Math.max(5, getBandwidth(settings.scenario, t)));
-  const ot = Math.round(Math.max(0, getOtherTraffic(settings.scenario, t)));
+//   const t = prev.tick + 1;
+//   const playerRate = clamp(prev.playerRate + delta, MIN_RATE, MAX_RATE);
+//   const bw = Math.round(Math.max(5, getBandwidth(settings.scenario, t)));
+//   const ot = Math.round(Math.max(0, getOtherTraffic(settings.scenario, t)));
 
-  const pArr = playerRate;
-  const oArr = ot;
-  const curQ = prev.playerQueue + prev.otherQueue;
-  const overflow = Math.max(0, curQ + pArr + oArr - settings.bufferSize);
-  const pDrop = overflow ? Math.min(Math.ceil((pArr / (pArr + oArr)) * overflow), pArr) : 0;
-  const oDrop = overflow - pDrop;
+//   const pArr = playerRate;
+//   const oArr = ot;
+//   const curQ = prev.playerQueue + prev.otherQueue;
+//   const overflow = Math.max(0, curQ + pArr + oArr - settings.bufferSize);
+//   const pDrop = overflow ? Math.min(Math.ceil((pArr / (pArr + oArr)) * overflow), pArr) : 0;
+//   const oDrop = overflow - pDrop;
 
-  let playerQ = prev.playerQueue + pArr - pDrop;
-  let otherQ = prev.otherQueue + oArr - oDrop;
-  const qLen = playerQ + otherQ;
-  const served = Math.min(qLen, bw);
-  const pDel = qLen ? Math.round((playerQ / qLen) * served) : 0;
+//   let playerQ = prev.playerQueue + pArr - pDrop;
+//   let otherQ = prev.otherQueue + oArr - oDrop;
+//   const qLen = playerQ + otherQ;
+//   const served = Math.min(qLen, bw);
+//   const pDel = qLen ? Math.round((playerQ / qLen) * served) : 0;
 
-  playerQ = Math.max(0, playerQ - pDel);
-  otherQ = Math.max(0, otherQ - (served - pDel));
+//   playerQ = Math.max(0, playerQ - pDel);
+//   otherQ = Math.max(0, otherQ - (served - pDel));
 
-  const latency = bw ? (playerQ + otherQ) / bw : 10;
-  const latNorm = Math.min(1, latency / 6);
+//   const latency = bw ? (playerQ + otherQ) / bw : 10;
+//   const latNorm = Math.min(1, latency / 6);
 
-  const sentWindow = boundedPush(prev.sentWindow, pArr, LOSS_WINDOW);
-  const droppedWindow = boundedPush(prev.droppedWindow, pDrop, LOSS_WINDOW);
-  const lossRate =
-    sentWindow.reduce((s, v) => s + v, 0)
-      ? droppedWindow.reduce((s, v) => s + v, 0) /
-        sentWindow.reduce((s, v) => s + v, 0)
-      : 0;
+//   const sentWindow = boundedPush(prev.sentWindow, pArr, LOSS_WINDOW);
+//   const droppedWindow = boundedPush(prev.droppedWindow, pDrop, LOSS_WINDOW);
+//   const lossRate =
+//     sentWindow.reduce((s, v) => s + v, 0)
+//       ? droppedWindow.reduce((s, v) => s + v, 0) /
+//         sentWindow.reduce((s, v) => s + v, 0)
+//       : 0;
 
-  const utilBonus = pDel && lossRate < 0.01 ? UTIL_BONUS : 0;
-  const scoreΔ = REWARD * pDel - DROP_PENALTY * pDrop + utilBonus;
-  const congestion = pDrop > 0 || latNorm > 0.75;
-  const aimdRate = congestion ? Math.max(1, prev.aimdRate / 2) : Math.min(MAX_RATE, prev.aimdRate + 1);
+//   const utilBonus = pDel && lossRate < 0.01 ? UTIL_BONUS : 0;
+//   const scoreΔ = REWARD * pDel - DROP_PENALTY * pDrop + utilBonus;
+//   const congestion = pDrop > 0 || latNorm > 0.75;
+//   const aimdRate = congestion ? Math.max(1, prev.aimdRate / 2) : Math.min(MAX_RATE, prev.aimdRate + 1);
 
-  const tpNorm = playerRate ? Math.min(1, pDel / playerRate) : 0;
-  const deltaNorm = clamp((scoreΔ + 15) / 35, 0, 1);
-  const aimdNorm = Math.min(1, aimdRate / 50);
+//   const tpNorm = playerRate ? Math.min(1, pDel / playerRate) : 0;
+//   const deltaNorm = clamp((scoreΔ + 15) / 35, 0, 1);
+//   const aimdNorm = Math.min(1, aimdRate / 50);
 
-  const aimdRow = {
-    tick: t,
-    aimdRate: Math.round(aimdRate),
-    playerRate,
-    congestion,
-    action: congestion ? `÷2 → ${Math.round(aimdRate)}` : `+1 → ${Math.round(aimdRate)}`
-  };
+//   const aimdRow = {
+//     tick: t,
+//     aimdRate: Math.round(aimdRate),
+//     playerRate,
+//     congestion,
+//     action: congestion ? `÷2 → ${Math.round(aimdRate)}` : `+1 → ${Math.round(aimdRate)}`
+//   };
 
-  return {
-    ...prev,
-    phase: t >= settings.maxTicks ? PHASE.FINISHED : PHASE.RUNNING,
-    tick: t,
-    playerRate,
-    peakRate: Math.max(prev.peakRate, playerRate),
-    playerQueue: playerQ,
-    otherQueue: otherQ,
-    totalScore: prev.totalScore + scoreΔ,
-    totalDelivered: prev.totalDelivered + pDel,
-    totalDropped: prev.totalDropped + pDrop,
-    // simulateTick's return value
-    totalSent: prev.totalSent + pArr,
-    totalBandwidth: prev.totalBandwidth + bw,
-    congestionEvents: prev.congestionEvents + (congestion ? 1 : 0),
-    aimdRate,
-    sentWindow,
-    droppedWindow,
-    histTP: boundedPush(prev.histTP, tpNorm, HISTORY_LEN),
-    histLoss: boundedPush(prev.histLoss, lossRate, HISTORY_LEN),
-    histLat: boundedPush(prev.histLat, latNorm, HISTORY_LEN),
-    histDelta: boundedPush(prev.histDelta, deltaNorm, HISTORY_LEN),
-    histAIMD: boundedPush(prev.histAIMD, aimdNorm, HISTORY_LEN),
-    aimdLog: [aimdRow, ...prev.aimdLog].slice(0, 25),
-    packets: buildPackets({ t, sent: pArr, dropped: pDrop, delivered: Math.min(pDel, pArr - pDrop) }),
-    lastResult: {
-      bw,
-      ot,
-      pArr,
-      pDrop,
-      pDel,
-      latNorm,
-      lossRate,
-      scoreΔ,
-      congestion,
-      queue: playerQ + otherQ,
-      playerRate
-    }
-  };
-}
+//   return {
+//     ...prev,
+//     phase: t >= settings.maxTicks ? PHASE.FINISHED : PHASE.RUNNING,
+//     tick: t,
+//     playerRate,
+//     peakRate: Math.max(prev.peakRate, playerRate),
+//     playerQueue: playerQ,
+//     otherQueue: otherQ,
+//     totalScore: prev.totalScore + scoreΔ,
+//     totalDelivered: prev.totalDelivered + pDel,
+//     totalDropped: prev.totalDropped + pDrop,
+//     // simulateTick's return value
+//     totalSent: prev.totalSent + pArr,
+//     totalBandwidth: prev.totalBandwidth + bw,
+//     congestionEvents: prev.congestionEvents + (congestion ? 1 : 0),
+//     aimdRate,
+//     sentWindow,
+//     droppedWindow,
+//     histTP: boundedPush(prev.histTP, tpNorm, HISTORY_LEN),
+//     histLoss: boundedPush(prev.histLoss, lossRate, HISTORY_LEN),
+//     histLat: boundedPush(prev.histLat, latNorm, HISTORY_LEN),
+//     histDelta: boundedPush(prev.histDelta, deltaNorm, HISTORY_LEN),
+//     histAIMD: boundedPush(prev.histAIMD, aimdNorm, HISTORY_LEN),
+//     aimdLog: [aimdRow, ...prev.aimdLog].slice(0, 25),
+//     packets: buildPackets({ t, sent: pArr, dropped: pDrop, delivered: Math.min(pDel, pArr - pDrop) }),
+//     lastResult: {
+//       bw,
+//       ot,
+//       pArr,
+//       pDrop,
+//       pDel,
+//       latNorm,
+//       lossRate,
+//       scoreΔ,
+//       congestion,
+//       queue: playerQ + otherQ,
+//       playerRate
+//     }
+//   };
+// }
 
 /* ━━━━━━━━━━ PRESENTATION COMPONENTS ━━━━━━━━━━ */
 function PacketGrid({ packets, playerRate }) {
@@ -294,7 +287,7 @@ function HistoryCanvas({ game }) {
   return <canvas ref={ref} className="history-canvas" />;
 }
 
-function ResultsOverlay({ game, onReset, saveState }) {
+function ResultsOverlay({ game, settings, onReset, saveState }) {
   const lossRate = game.totalSent ? game.totalDropped / game.totalSent : 0;
   const efficiency = game.totalSent ? game.totalDelivered / game.totalSent : 0;
   const [tier, tierClass] = tierFromScore(game.totalScore);
@@ -342,8 +335,8 @@ function ResultsOverlay({ game, onReset, saveState }) {
             </p>
           )}
         </div>
-
-        <button className="cf-btn primary play-again-btn" onClick={onReset}>Play Again</button>
+            <GameReviewPanel game={game} settings={settings} />
+            <button className="cf-btn primary play-again-btn" onClick={onReset}>Play Again</button>
       </div>
     </div>
   );
@@ -357,11 +350,12 @@ function GamePage() {
 
   /* settings state */
   const [settings, setSettings] = useState({
-    scenario: 1,
-    maxTicks: 80,
-    bufferSize: 50,
-    initialRate: 10
-  });
+  scenario: 1,
+  maxTicks: 80,
+  bufferSize: 50,
+  initialRate: 10,
+  competitor: 'none'
+});
 
   /* game state */
   const [game, setGame] = useState(() => createInitialGame(settings, PHASE.SETUP));
@@ -399,7 +393,8 @@ function GamePage() {
   }, [game, rateDelta, result, settings.bufferSize, settings.maxTicks]);
 
   /* handlers */
-  const updateSetting = (k, v) => setSettings((s) => ({ ...s, [k]: Number(v) }));
+const updateSetting = (k, v) => setSettings((s) => ({ ...s, [k]: Number(v) }));
+const updateCompetitor = (v) => setSettings((s) => ({ ...s, competitor: v }));
 
   const reset = () => {
     setRateDelta(0);
@@ -412,11 +407,12 @@ function GamePage() {
 
   const startGame = () => {
     const safe = {
-      scenario: clamp(settings.scenario, 1, 3),
-      maxTicks: clamp(settings.maxTicks, 10, 300),
-      bufferSize: clamp(settings.bufferSize, 10, 200),
-      initialRate: clamp(settings.initialRate, MIN_RATE, MAX_RATE)
-    };
+    scenario: clamp(settings.scenario, 1, 3),
+    maxTicks: clamp(settings.maxTicks, 10, 300),
+    bufferSize: clamp(settings.bufferSize, 10, 200),
+    initialRate: clamp(settings.initialRate, MIN_RATE, MAX_RATE),
+    competitor: settings.competitor
+  };
     setSettings(safe);
     setRateDelta(0);
     setAuto(false);
@@ -556,13 +552,26 @@ function GamePage() {
                   <input type="number" min="10" max="200" value={settings.bufferSize} onChange={(e) => updateSetting('bufferSize', e.target.value)} />
                 </label>
                 <label>
-                  <span>Initial Rate</span>
+                <span>Initial Rate</span>
                   <input type="number" min="1" max="80" value={settings.initialRate} onChange={(e) => updateSetting('initialRate', e.target.value)} />
                 </label>
-              </div>
-              <button className="cf-btn primary" style={{ marginTop: 12 }} onClick={startGame}>
-                ▶ Start Game
-              </button>
+                <label>
+                  <span>Competitor Algorithm</span>
+                  <select value={settings.competitor} onChange={(e) => updateCompetitor(e.target.value)}>
+                    {COMPETITOR_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                </div>
+                <p className="competitor-hint">
+                  {settings.competitor === 'none'
+                    ? 'Optional: pick an engine to run alongside you for a post-game comparison and coaching report.'
+                    : 'The engine plays the exact same bandwidth and background traffic as you, independently — like a chess engine analyzing the same position.'}
+                </p>
+                <button className="cf-btn primary" style={{ marginTop: 12 }} onClick={startGame}>
+                  ▶ Start Game
+                </button>
             </div>
           </section>
         </div>
@@ -647,8 +656,7 @@ function GamePage() {
       )}
 
       {/* FINISHED */}
-      {inFinish && <ResultsOverlay game={game} onReset={reset} saveState={saveState} />}
-    </>
+      {inFinish && <ResultsOverlay game={game} settings={settings} onReset={reset} saveState={saveState} />}    </>
   );
 }
 
