@@ -232,6 +232,111 @@ function PacketGrid({ packets, playerRate }) {
   );
 }
 
+
+function HowToPlayPanel() {
+  return (
+    <section className="panel how-to-play">
+      <div className="panel-header">▶ What Is This Game &amp; Why Play It</div>
+      <div className="panel-body">
+        <p>
+          You play a data sender sharing one network link with background
+          traffic. Every tick you decide how fast to send — the same
+          trade-off every real TCP connection makes, thousands of times a
+          second, without you ever noticing. Here, you get to feel it happen
+          in slow motion.
+        </p>
+
+        <p>
+          <strong>Why it's worth playing:</strong> reading about congestion
+          control tells you the rules; playing it builds the intuition —
+          why speeding up feels great until it suddenly isn't, and why
+          playing it too safe quietly wastes the bandwidth you paid for.
+        </p>
+
+        <div className="how-to-play-grid">
+          <div>
+            <h4>What to watch</h4>
+            <ul>
+              <li><strong>TP (Throughput)</strong> — how much of what you send actually gets through.</li>
+              <li><strong>Loss</strong> — the share of your packets dropped in the last 20 ticks.</li>
+              <li><strong>Lat (Latency)</strong> — how backed-up the shared queue is.</li>
+              <li><strong>Ghost</strong> — a reference sender playing it "by the book" (classic AIMD). Beating it is the real goal.</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4>What to increase / decrease</h4>
+            <ul>
+              <li><strong>Increase rate</strong> when Loss is 0%, Latency is low or falling, and Ghost sits above your current rate.</li>
+              <li><strong>Decrease rate</strong> right after any drop, or once Latency climbs past roughly 0.7 — don't wait for a drop to confirm what Latency is already telling you.</li>
+              <li><strong>Hold steady</strong> when you're tracking close to Ghost with clean delivery — that's usually close to the sweet spot.</li>
+            </ul>
+          </div>
+        </div>
+
+        <p className="how-to-play-footnote">
+          Full scoring rules, the exact simulation formulas, and detailed
+          strategy tips are in the reference table below — worth a skim
+          before your first round.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function AlgorithmReferencePanel() {
+  const rows = [
+    ['Buffer model', "Finite FIFO queue shared between you and background traffic. Separate counters track each sender's packets so drops are attributed fairly."],
+    ['Overflow policy', 'Tail-drop: when the queue overflows, drops are split proportionally between you and other traffic based on how much each sent that tick.'],
+    ['Service / drain', 'Each tick, served = min(queueLength, bandwidth). Your delivered share is served × (your queue ÷ total queue).'],
+    ['Latency', 'queueAfterService ÷ bandwidth, normalized to 0–1 (capped at 6× bandwidth). A consequence of congestion, not something you set directly.'],
+    ['Loss rate', 'Rolling 20-tick window: drops in that window ÷ packets sent in that window.'],
+    ['Scoring', `+${REWARD.toFixed(1)} per packet delivered, −${DROP_PENALTY.toFixed(1)} per packet dropped, +${UTIL_BONUS.toFixed(1)} bonus per tick when you deliver packets with under 1% loss. Drops cost 4× more than deliveries earn.`],
+    ['AIMD ghost', 'A reference sender using classic TCP Reno rules: congestion → rate ÷ 2 (multiplicative decrease); no congestion → rate + 1 (additive increase). Beat it by finding a higher stable rate without triggering more drops.'],
+    ['Scenarios', 'Stable Bandwidth: fixed 30 pkts/tick, gentle background traffic. Bursty Traffic: fixed 30 pkts/tick, background mostly light with a 10% chance of a heavy burst each tick. Oscillating Network: both bandwidth and background traffic swing up and down together.'],
+    [
+      'Strategy tips',
+      [
+        'Ramp up gradually — a dropped packet costs 4× more than a delivered one earns, so aggressive jumps rarely pay off.',
+        'Track near the AIMD Ghost line rather than far above it. Ghost never overshoots (halves on congestion, +1 otherwise), so matching it usually means zero drops.',
+        "The +0.5 bonus needs delivery AND under 1% loss in the rolling window — one bad burst can wipe out several ticks of bonus, so back off early rather than waiting it out.",
+        'Latency over 0.75 counts as congestion even with zero drops — ease off once Lat is climbing, not just after a drop happens.',
+        'Prefer small, frequent rate changes (±1–2) over big swings. The buffer is a fixed size, so overshooting fills it fast and cuts everyone\u2019s packets proportionally.'
+      ]
+    ]
+  ];
+
+  return (
+    <section className="panel algo-reference">
+      <div className="panel-header">▶ Algorithm Reference — How the Simulation Works</div>
+      <table className="cf-table algo-reference-table">
+        <thead>
+          <tr><th>Concept</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          {rows.map(([concept, description]) => (
+            <tr key={concept}>
+              <td className="algo-reference-concept">{concept}</td>
+              <td>
+                {Array.isArray(description) ? (
+                  <ul className="algo-reference-tips">
+                    {description.map((tip) => (
+                      <li key={tip}>{tip}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  description
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+
 function HistoryCanvas({ game }) {
   const ref = useRef(null);
 
@@ -531,6 +636,8 @@ const updateCompetitor = (v) => setSettings((s) => ({ ...s, competitor: v }));
       {/* SETUP */}
       {inSetup && (
         <div className="content">
+          <HowToPlayPanel />
+
           <section className="panel">
             <div className="panel-header">▶ Round Setup</div>
             <div className="panel-body">
@@ -552,7 +659,7 @@ const updateCompetitor = (v) => setSettings((s) => ({ ...s, competitor: v }));
                   <input type="number" min="10" max="200" value={settings.bufferSize} onChange={(e) => updateSetting('bufferSize', e.target.value)} />
                 </label>
                 <label>
-                <span>Initial Rate</span>
+                  <span>Initial Rate</span>
                   <input type="number" min="1" max="80" value={settings.initialRate} onChange={(e) => updateSetting('initialRate', e.target.value)} />
                 </label>
                 <label>
@@ -563,17 +670,19 @@ const updateCompetitor = (v) => setSettings((s) => ({ ...s, competitor: v }));
                     ))}
                   </select>
                 </label>
-                </div>
-                <p className="competitor-hint">
-                  {settings.competitor === 'none'
-                    ? 'Optional: pick an engine to run alongside you for a post-game comparison and coaching report.'
-                    : 'The engine plays the exact same bandwidth and background traffic as you, independently — like a chess engine analyzing the same position.'}
-                </p>
-                <button className="cf-btn primary" style={{ marginTop: 12 }} onClick={startGame}>
-                  ▶ Start Game
-                </button>
+              </div>
+              <p className="competitor-hint">
+                {settings.competitor === 'none'
+                  ? 'Optional: pick an engine to run alongside you for a post-game comparison and coaching report.'
+                  : 'The engine plays the exact same bandwidth and background traffic as you, independently — like a chess engine analyzing the same position.'}
+              </p>
+              <button className="cf-btn primary" style={{ marginTop: 12 }} onClick={startGame}>
+                ▶ Start Game
+              </button>
             </div>
           </section>
+
+          <AlgorithmReferencePanel />
         </div>
       )}
 
