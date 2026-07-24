@@ -16,6 +16,7 @@ import DashboardGames from './pages/dashboard/DashboardGames.jsx';
 import GamePage from './pages/GamePage.jsx';
 import LeaderboardPage from './pages/LeaderboardPage.jsx';
 import UserProfilePage from './pages/UserProfilePage.jsx';
+import ChatBox from './components/ui/ChatBox.jsx';
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <ChatBox/>
       </BrowserRouter>
     </AuthProvider>
   );
