@@ -5,8 +5,8 @@ import { upload } from '../middleware/upload.middleware.js';
 
 import {
   getProfile,
-  getPublicProfileByUsername,
-  toggleFriend,
+  getUserList,
+  addFriend,
   updateAvatar
 } from '../controllers/user.controller.js';
 
@@ -15,7 +15,7 @@ const userRouter = Router();
 // Authenticated-only routes for the logged-in user's own account.
 userRouter.get('/profile', protect, getProfile);
 userRouter.post('/avatar', protect, upload.single('avatar'), updateAvatar);
-
+userRouter.get('/', getUserList);
 userRouter.post('/friends/add', protect, toggleFriend);
 userRouter.post('/friends/:friendId', protect, toggleFriend);
 

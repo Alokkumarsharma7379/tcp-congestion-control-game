@@ -12,6 +12,23 @@ const PUBLIC_PROFILE_FIELDS =
   'currentStreak maxYearlyStreak totalStreak gamesPlayedThisMonth ' +
   'lastVisit createdAt friends';
 
+const getUserList = async (req, res, next) => {
+  try {
+    const users = await User.find({ _id: { $ne: req.user._id } })
+      .select('_id username avatarUrl rating')
+      .sort({ username: 1 })
+      .limit(200)
+      .lean();
+
+    return new SuccessResponse({
+      message: 'User list fetched successfully.',
+      data: { users }
+    }).send(res);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const updateAvatar = async (req, res, next) => {
   try {
     if (!req.file) {
@@ -219,4 +236,4 @@ const toggleFriend = async (req, res, next) => {
   }
 };
 
-export { getProfile, getPublicProfileByUsername, toggleFriend, updateAvatar };
+export { getUserList, updateAvatar, getProfile, getPublicProfileByUsername, toggleFriend };
