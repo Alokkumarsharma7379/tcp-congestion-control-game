@@ -4,6 +4,10 @@ const getProfile = () => {
   return apiRequest('/users/profile');
 };
 
+const getUserList = () => {
+  return apiRequest('/users');
+};
+
 const getPublicProfile = (username) => {
   return apiRequest(`/users/${encodeURIComponent(username)}`);
 };
@@ -24,4 +28,4 @@ const uploadAvatar = (file) => {
   });
 };
 
-export { getProfile, getPublicProfile, toggleFriend, uploadAvatar };
+export { getProfile, getUserList, getPublicProfile, toggleFriend, uploadAvatar };
