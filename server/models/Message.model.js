@@ -47,6 +47,11 @@ const messageSchema = new Schema(
       maxlength: [500, 'Message cannot exceed 500 characters.']
     },
 
+    isEdited: {
+      type: Boolean,
+      default: false
+    },
+    
     // "Delete for everyone" — the message stays in the DB (so this can't be
     // used to silently corrupt history), but every client renders a
     // placeholder instead of the real text once this is true.
