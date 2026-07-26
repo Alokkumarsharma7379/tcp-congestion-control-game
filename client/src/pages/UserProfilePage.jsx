@@ -142,6 +142,12 @@ function UserProfilePage() {
             </button>
           )}
 
+          {!isSelf && (
+            <Link className="cf-btn primary" to={`/chat/${user.id}`}>
+              💬 Talk
+            </Link>
+          )}
+
           {!isSelf && !isAuthenticated && (
             <Link className="cf-btn" to="/login">
               Login to add friend

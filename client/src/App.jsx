@@ -17,6 +17,7 @@ import GamePage from './pages/GamePage.jsx';
 import LeaderboardPage from './pages/LeaderboardPage.jsx';
 import UserProfilePage from './pages/UserProfilePage.jsx';
 import ChatBox from './components/ui/ChatBox.jsx';
+import DirectMessagesPage from './pages/DirectMessagesPage.jsx';
 
 function App() {
   return (
@@ -40,6 +41,8 @@ function App() {
             <Route path="/game" element={<GamePage />} />
             <Route path="/leaderboard" element={<LeaderboardPage />} />
             <Route path="/u/:username" element={<UserProfilePage />} />
+            <Route path="/chat" element={<DirectMessagesPage />} />
+            <Route path="/chat/:userId" element={<DirectMessagesPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
