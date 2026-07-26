@@ -6,6 +6,7 @@ import authRouter from './routes/auth.routes.js';
 import userRouter from './routes/user.routes.js';
 import gameRouter from './routes/game.routes.js';
 import leaderboardRouter from './routes/leaderboard.routes.js';
+import messageRouter from './routes/message.routes.js';
 
 import { SuccessResponse } from './utils/apiResponse.js';
 import {
@@ -42,6 +43,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/users', userRouter);
 app.use('/api/game', gameRouter);
 app.use('/api/leaderboard', leaderboardRouter);
+app.use('/api/messages', messageRouter);
 
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
