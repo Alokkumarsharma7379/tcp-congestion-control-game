@@ -2360,3 +2360,375 @@ kbd {
     width: calc(100vw - 32px);
   }
 }
+
+/* ━━━━━━━━━━ Direct Messages Page (WhatsApp/Telegram-style) ━━━━━━━━━━ */
+
+.dm-page {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: calc(100vh - 140px);
+  min-height: 500px;
+  border: 1px solid #c0c0c0;
+  background: #ffffff;
+}
+
+.dm-sidebar {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #e0e0e0;
+  background: #f7f9fb;
+  min-height: 0;
+}
+
+.dm-sidebar-header {
+  padding: 12px;
+  font-weight: 700;
+  color: #1a5276;
+  border-bottom: 1px solid #e0e0e0;
+  background: #ffffff;
+}
+
+.dm-search {
+  margin: 8px;
+  padding: 7px 10px;
+  border: 1px solid #c0c0c0;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.dm-conversation-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.dm-conversation-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid #eceff3;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dm-conversation-row:hover {
+  background: #eef3ff;
+}
+
+.dm-conversation-row.active {
+  background: #e3edfb;
+}
+
+.dm-conversation-avatar {
+  position: relative;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #1a5276;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.dm-conversation-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dm-online-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #27ae60;
+  border: 2px solid #ffffff;
+}
+
+.dm-conversation-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dm-conversation-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: #1a1a1a;
+}
+
+.dm-conversation-preview {
+  font-size: 12px;
+  color: #667085;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dm-conversation-time {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: #8a93a6;
+  align-self: flex-start;
+}
+
+.dm-empty-hint {
+  padding: 16px 12px;
+  font-size: 12px;
+  color: #8a93a6;
+  text-align: center;
+}
+
+/* Main thread panel */
+
+.dm-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dm-empty-state {
+  margin: auto;
+  color: #8a93a6;
+  font-size: 14px;
+}
+
+.dm-thread-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f7f9fb;
+}
+
+.dm-thread-username {
+  font-weight: 700;
+  color: #1a1a1a;
+  font-size: 14px;
+}
+
+.dm-thread-status {
+  font-size: 11px;
+  color: #8a93a6;
+}
+
+.dm-messages {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #eef1f3;
+}
+
+.dm-message {
+  max-width: 60%;
+  padding: 7px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.dm-message-other {
+  align-self: flex-start;
+  background: #ffffff;
+  color: #1a1a1a;
+  border-bottom-left-radius: 2px;
+}
+
+.dm-message-mine {
+  align-self: flex-end;
+  background: #1a5276;
+  color: #ffffff;
+  border-bottom-right-radius: 2px;
+}
+
+.dm-message-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.dm-message-text {
+  flex: 1 1 auto;
+}
+
+.dm-message-deleted {
+  font-style: italic;
+  opacity: 0.75;
+}
+
+.dm-message-meta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  opacity: 0.75;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.dm-message-edited-tag {
+  font-style: italic;
+}
+
+.dm-message-menu-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.dm-message-menu-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.dm-message-menu-btn:hover {
+  opacity: 1;
+}
+
+.dm-message-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: #ffffff;
+  border: 1px solid #c0c0c0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  overflow: hidden;
+}
+
+.dm-message-menu button {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #1a1a1a;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dm-message-menu button:hover {
+  background: #f0f4f8;
+}
+
+.dm-edit-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.dm-edit-row input {
+  padding: 5px 8px;
+  border: 1px solid #c0c0c0;
+  border-radius: 4px;
+  font-size: 13px;
+  min-width: 180px;
+}
+
+.dm-error {
+  padding: 6px 14px;
+  font-size: 12px;
+  color: #cc0000;
+  background: #fce6e6;
+  border-top: 1px solid #f5c2c2;
+}
+
+.dm-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #e0e0e0;
+  background: #ffffff;
+}
+
+.dm-input-row input {
+  flex: 1 1 auto;
+  padding: 8px 10px;
+  border: 1px solid #c0c0c0;
+  border-radius: 20px;
+  font-size: 13px;
+}
+
+.dm-emoji-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.dm-emoji-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.dm-emoji-palette {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 6px;
+  background: #ffffff;
+  border: 1px solid #c0c0c0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  padding: 6px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  z-index: 10;
+}
+
+.dm-emoji-palette button {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.dm-emoji-palette button:hover {
+  background: #f0f4f8;
+}
+
+@media (max-width: 720px) {
+  .dm-page {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    height: auto;
+  }
+
+  .dm-sidebar {
+    border-right: none;
+    border-bottom: 1px solid #e0e0e0;
+    max-height: 240px;
+  }
+}
