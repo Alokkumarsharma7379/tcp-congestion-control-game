@@ -28,6 +28,7 @@ function Navbar() {
         <NavLink to="/game" className={navLinkClassName}>Play</NavLink>
         <NavLink to="/leaderboard" className={navLinkClassName}>Leaderboard</NavLink>
         <NavLink to="/dashboard" className={navLinkClassName}>Dashboard</NavLink>
+        <NavLink to="/contest/host" className={navLinkClassName}>Compete</NavLink>
       </nav>
 
       <div className="app-navbar-account">

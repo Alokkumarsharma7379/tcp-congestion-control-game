@@ -7,7 +7,8 @@ const SIDEBAR_LINKS = [
   { to: '/', label: 'Home', icon: '🏠', end: true },
   { to: '/game', label: 'Play', icon: '▶' },
   { to: '/leaderboard', label: 'Leaderboard', icon: '🏆' },
-  { to: '/dashboard', label: 'Dashboard', icon: '📊' }
+  { to: '/dashboard', label: 'Dashboard', icon: '📊' },
+  { to: '/contest/host', label: 'Compete', icon: '🏁' }
 ];
 
 const navLinkClassName = ({ isActive }) => (isActive ? 'active' : undefined);

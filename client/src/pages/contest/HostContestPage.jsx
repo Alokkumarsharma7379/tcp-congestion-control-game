@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { createContest } from '../../api/contestApi';
+import { createContest, getContest } from '../../api/contestApi';
 
 import '../../styles/codeforces.css';
 
@@ -23,8 +23,34 @@ function HostContestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState('');
+
   const updateField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleJoin = async (event) => {
+    event.preventDefault();
+
+    const code = joinCode.trim().toUpperCase();
+
+    if (!code) {
+      setJoinError('Enter a room code.');
+      return;
+    }
+
+    setJoining(true);
+    setJoinError('');
+
+    try {
+      await getContest(code); // just confirms the room exists first
+      navigate(`/contest/${code}/lobby`);
+    } catch (err) {
+      setJoinError(err.message || 'No contest found with that code.');
+      setJoining(false);
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -60,6 +86,25 @@ function HostContestPage() {
 
   return (
     <main className="content">
+      <section className="panel join-contest-panel">
+        <div className="panel-header">▶ Join a Contest</div>
+        <div className="panel-body">
+          <form className="join-contest-form" onSubmit={handleJoin}>
+            <input
+              type="text"
+              value={joinCode}
+              maxLength={6}
+              placeholder="Enter room code (e.g. K7P2QX)"
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+            />
+            <button type="submit" className="cf-btn primary" disabled={joining}>
+              {joining ? 'Checking...' : 'Join'}
+            </button>
+          </form>
+          {joinError && <div className="form-error">{joinError}</div>}
+        </div>
+      </section>
+
       <section className="panel">
         <div className="panel-header">▶ Host a Contest</div>
         <div className="panel-body">

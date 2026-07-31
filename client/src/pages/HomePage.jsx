@@ -8,6 +8,7 @@ function HomePage() {
       <p>Choose an action:</p>
       <ul>
         <li><Link to="/game">Play the Game</Link></li>
+        <li><Link to="/contest/host">🏁 Host / Join Contest (Compete)</Link></li>
         <li><Link to="/login">Log In</Link></li>
         <li><Link to="/register">Register</Link></li>
         <li><Link to="/dashboard">Dashboard</Link></li>

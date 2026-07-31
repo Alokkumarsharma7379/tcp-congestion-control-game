@@ -2941,3 +2941,24 @@ kbd {
   justify-content: center;
   gap: 10px;
 }
+
+.join-contest-panel {
+  margin-bottom: 16px;
+}
+
+.join-contest-form {
+  display: flex;
+  gap: 10px;
+  max-width: 420px;
+}
+
+.join-contest-form input {
+  flex: 1 1 auto;
+  padding: 8px 10px;
+  border: 1px solid #c0c0c0;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: "Courier New", Courier, monospace;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
