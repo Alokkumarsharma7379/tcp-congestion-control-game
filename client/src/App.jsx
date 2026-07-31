@@ -18,6 +18,9 @@ import LeaderboardPage from './pages/LeaderboardPage.jsx';
 import UserProfilePage from './pages/UserProfilePage.jsx';
 import ChatBox from './components/ui/ChatBox.jsx';
 import DirectMessagesPage from './pages/DirectMessagesPage.jsx';
+import HostContestPage from './pages/contest/HostContestPage.jsx';
+import ContestLobbyPage from './pages/contest/ContestLobbyPage.jsx';
+import ContestGameCanvas from './pages/contest/ContestGameCanvas.jsx';
 
 function App() {
   return (
@@ -43,6 +46,9 @@ function App() {
             <Route path="/u/:username" element={<UserProfilePage />} />
             <Route path="/chat" element={<DirectMessagesPage />} />
             <Route path="/chat/:userId" element={<DirectMessagesPage />} />
+            <Route path="/contest/host" element={<HostContestPage />} />
+            <Route path="/contest/:roomCode/lobby" element={<ContestLobbyPage />} />
+            <Route path="/contest/:roomCode/play" element={<ContestGameCanvas />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
