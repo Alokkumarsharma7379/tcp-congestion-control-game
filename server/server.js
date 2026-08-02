@@ -8,6 +8,7 @@ import connectDB from './config/db.js';
 import { verifyToken } from './config/jwt.js';
 import User from './models/User.model.js';
 import Message from './models/Message.model.js';
+import { registerContestHandlers } from './socket/contestSocket.js';
 
 const { isValidObjectId } = mongoose;
 
@@ -94,6 +95,7 @@ io.on('connection', (socket) => {
   const becameOnline = markOnline(selfId, socket.id);
   socket.emit('online_users', Array.from(onlineUsers.keys()));
   if (becameOnline) io.emit('user_online', selfId);
+  registerContestHandlers(io, socket);
 
   socket.on('disconnect', () => {
     const becameOffline = markOffline(selfId, socket.id);
