@@ -187,7 +187,22 @@ $$
 \Delta \text{score} = r \cdot \text{delivered} - p \cdot \text{dropped} + u \cdot \text{utilization bonus}
 $$
 
-where the drop penalty $p$ is intentionally large enough to make reckless oversending unattractive.
+where the drop penalty $p$ is intentionally large enough to make reckless oversending unattractive. The saved **rating** is calculated separately from the raw round score using a performance index:
+
+$$
+\text{performance index} = \text{utilization} \times \max(0, 1 - 3 \times \text{loss rate})
+$$
+
+A performance index of about **35%** is neutral. Below that, rating falls; above that, rating rises. This is why a run can feel busy or competitive but still lose rating if loss is high: for example, 34% utilization with 30% loss becomes roughly `0.34 × (1 - 0.90) ≈ 0.03`, far below the neutral point.
+
+#### How to gain rating consistently
+
+- **Aim for low loss first.** A loss rate under 2% is usually healthy; above 10% it becomes very difficult to gain rating because drops sharply reduce the performance index.
+- **Probe slowly, then hold.** Increase while the queue is empty and loss is 0%, but stop increasing when delivered throughput stops improving or latency starts climbing.
+- **Back off before the buffer is full.** The queue/latency chart is an early warning. Reducing one or two steps before visible drops usually beats waiting for a large drop burst.
+- **Recover gradually after congestion.** Once loss returns to 0% and the queue drains, increase again in small steps instead of jumping straight back to the previous high rate.
+- **Do not chase CUBIC/BBR blindly.** The bots may tolerate short bursts differently, but your rating is judged by your own utilization and loss. Matching a bot with high loss can still reduce rating.
+- **Watch the performance index in the review.** Treat it as the rating predictor: under 35 means the round likely loses rating; above 35 means the round likely gains rating.
 
 ### Multiplayer contest mode
 

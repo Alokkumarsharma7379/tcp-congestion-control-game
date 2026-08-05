@@ -161,11 +161,25 @@ function GameReviewPanel({ game, settings }) {
 
   const verdicts = [];
 
-  if (playerStats.lossRate > 0.02 && playerStats.lossRate > avgBotLossRate * 1.5) {
+  if (playerStats.lossRate > 0.1) {
+    verdicts.push({
+      tone: 'bad',
+      title: 'Loss Is Crushing Your Rating',
+      text: `Your loss rate (${pct(playerStats.lossRate)}) is high enough to heavily discount utilization in the rating formula. Even if your throughput looks competitive, back off earlier and keep Loss closer to 0-2% before trying to speed up again.`
+    });
+  } else if (playerStats.lossRate > 0.02 && playerStats.lossRate > avgBotLossRate * 1.5) {
     verdicts.push({
       tone: 'bad',
       title: 'Overly Aggressive',
       text: `Your loss rate (${pct(playerStats.lossRate)}) is well above the engines' average (${pct(avgBotLossRate)}). You kept pushing your rate up even after signs of congestion — back off a step as soon as Loss ticks up, rather than waiting for it to compound.`
+    });
+  }
+
+  if (playerStats.performanceIndex < 35) {
+    verdicts.push({
+      tone: 'warn',
+      title: 'Below Rating-Neutral Pace',
+      text: `Your performance index was ${playerStats.performanceIndex}; rating gains usually require about 35 or more. Improve it by raising utilization only while loss stays low, because high loss subtracts more value than extra sent packets add.`
     });
   }
 
