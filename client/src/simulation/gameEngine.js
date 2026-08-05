@@ -59,47 +59,85 @@ const getOtherTraffic = (s, t) => {
 };
 
 /*
-  The core queue/buffer physics — tail-drop overflow split proportionally
-  between "self" (whoever is being simulated: the player, or a bot) and
-  "other" (background traffic), then service/drain proportional to queue
-  share. This is a direct extraction of what used to be inline in the
-  player's tick logic; calling it with the player's own numbers behaves
-  identically to before. Bots call the exact same function with their own
-  rate and their own virtual queue, so the physics are provably consistent
-  between player and bots.
+  The core shared queue/buffer physics — player, enabled engine competitors,
+  and background traffic all inject packets into the same finite bottleneck
+  queue. Tail-drop overflow is charged proportionally to this tick's arrivals,
+  then bottleneck service is split proportionally to each flow's queued share.
+
+  This is the important competitive-network invariant: if the player sends
+  more, there is less queue/bandwidth left for Cubic/BBR during that exact
+  tick, and their loss/throughput feedback changes. Earlier versions stepped
+  each bot through its own private copy of the queue with only background
+  traffic, so bot curves were nearly identical from round to round no matter
+  how the player behaved.
 */
-const stepQueueModel = ({
-  selfRate,
-  otherArrival,
-  selfQueue,
-  otherQueue,
-  bufferSize,
-  bandwidth
-}) => {
-  const curQ = selfQueue + otherQueue;
-  const overflow = Math.max(0, curQ + selfRate + otherArrival - bufferSize);
-  const selfDrop = overflow
-    ? Math.min(Math.ceil((selfRate / (selfRate + otherArrival)) * overflow), selfRate)
-    : 0;
-  const otherDrop = overflow - selfDrop;
+const allocateProportionally = (total, weights) => {
+  if (total <= 0) return weights.map(() => 0);
 
-  let nextSelfQueue = selfQueue + selfRate - selfDrop;
-  let nextOtherQueue = otherQueue + otherArrival - otherDrop;
-  const qLen = nextSelfQueue + nextOtherQueue;
+  const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
+  if (weightSum <= 0) return weights.map(() => 0);
+
+  const rawShares = weights.map((weight) => (weight / weightSum) * total);
+  const allocations = rawShares.map(Math.floor);
+  let remaining = total - allocations.reduce((sum, value) => sum + value, 0);
+
+  rawShares
+    .map((share, index) => ({ index, fraction: share - Math.floor(share) }))
+    .sort((a, b) => b.fraction - a.fraction)
+    .forEach(({ index }) => {
+      if (remaining <= 0) return;
+      allocations[index] += 1;
+      remaining -= 1;
+    });
+
+  return allocations;
+};
+
+const stepSharedQueueModel = ({ flows, backgroundQueue, backgroundArrival, bufferSize, bandwidth }) => {
+  const currentQueue = backgroundQueue + flows.reduce((sum, flow) => sum + flow.queue, 0);
+  const totalArrival = backgroundArrival + flows.reduce((sum, flow) => sum + flow.arrival, 0);
+  const overflow = Math.max(0, currentQueue + totalArrival - bufferSize);
+
+  const dropWeights = [...flows.map((flow) => flow.arrival), backgroundArrival];
+  const rawDrops = allocateProportionally(overflow, dropWeights);
+  const flowDrops = flows.map((flow, index) => Math.min(rawDrops[index], flow.arrival));
+  const backgroundDrop = Math.min(rawDrops[flows.length], backgroundArrival);
+
+  const queuedFlows = flows.map((flow, index) => ({
+    ...flow,
+    drop: flowDrops[index],
+    nextQueue: flow.queue + flow.arrival - flowDrops[index]
+  }));
+  let nextBackgroundQueue = backgroundQueue + backgroundArrival - backgroundDrop;
+
+  const qLen = nextBackgroundQueue + queuedFlows.reduce((sum, flow) => sum + flow.nextQueue, 0);
   const served = Math.min(qLen, bandwidth);
-  const selfDelivered = qLen ? Math.round((nextSelfQueue / qLen) * served) : 0;
+  const serviceWeights = [...queuedFlows.map((flow) => flow.nextQueue), nextBackgroundQueue];
+  const rawDelivered = allocateProportionally(served, serviceWeights);
 
-  nextSelfQueue = Math.max(0, nextSelfQueue - selfDelivered);
-  nextOtherQueue = Math.max(0, nextOtherQueue - (served - selfDelivered));
+  const nextFlows = queuedFlows.map((flow, index) => {
+    const delivered = Math.min(rawDelivered[index], flow.nextQueue);
+    return {
+      id: flow.id,
+      queue: Math.max(0, flow.nextQueue - delivered),
+      drop: flow.drop,
+      delivered
+    };
+  });
 
-  const latency = bandwidth ? (nextSelfQueue + nextOtherQueue) / bandwidth : 10;
+  const backgroundDelivered = Math.min(rawDelivered[queuedFlows.length], nextBackgroundQueue);
+  nextBackgroundQueue = Math.max(0, nextBackgroundQueue - backgroundDelivered);
+
+  const latency = bandwidth
+    ? (nextBackgroundQueue + nextFlows.reduce((sum, flow) => sum + flow.queue, 0)) / bandwidth
+    : 10;
   const latNorm = Math.min(1, latency / 6);
 
   return {
-    selfQueue: nextSelfQueue,
-    otherQueue: nextOtherQueue,
-    selfDrop,
-    selfDelivered,
+    flows: Object.fromEntries(nextFlows.map((flow) => [flow.id, flow])),
+    backgroundQueue: nextBackgroundQueue,
+    backgroundDrop,
+    backgroundDelivered,
     latNorm
   };
 };
@@ -213,41 +251,33 @@ const createBotState = (algorithm, initialRate) =>
     ? createCubicBotState(initialRate)
     : createBbrBotState(initialRate);
 
-// Advances one bot by one tick, using the SAME bandwidth/other-traffic
-// values the player saw this tick (passed in via `env`), so the comparison
-// is apples-to-apples.
-const stepBot = (bot, { tick, bandwidth, otherArrival, bufferSize }) => {
-  const cwnd =
-    bot.algorithm === 'cubic' ? nextCubicCwnd(bot, tick) : nextBbrCwnd(bot);
+// Advances one bot by one tick after the shared queue has already decided
+// that bot's delivered packets, drops, and remaining queue. The congestion
+// signal therefore reflects the player's traffic and every other enabled bot
+// in the same bottleneck, not an isolated per-bot copy of the network.
+const prepareBotCwnd = (bot, tick) =>
+  bot.algorithm === 'cubic' ? nextCubicCwnd(bot, tick) : nextBbrCwnd(bot);
 
-  const result = stepQueueModel({
-    selfRate: cwnd,
-    otherArrival,
-    selfQueue: bot.queue,
-    otherQueue: bot.otherQueue,
-    bufferSize,
-    bandwidth
-  });
-
-  const congestion = result.selfDrop > 0 || result.latNorm > 0.75;
+const applyBotSharedResult = (bot, { tick, cwnd, flowResult, bandwidth, latNorm }) => {
+  const congestion = flowResult.drop > 0 || latNorm > 0.75;
 
   const rateSamples =
     bot.algorithm === 'bbr'
-      ? boundedPush(bot.rateSamples, result.selfDelivered, BBR_RATE_WINDOW)
+      ? boundedPush(bot.rateSamples, flowResult.delivered, BBR_RATE_WINDOW)
       : bot.rateSamples;
 
   return {
     ...bot,
     cwnd,
-    queue: result.selfQueue,
-    otherQueue: result.otherQueue,
+    queue: flowResult.queue,
+    otherQueue: 0,
     totalSent: bot.totalSent + cwnd,
-    totalDelivered: bot.totalDelivered + result.selfDelivered,
-    totalDropped: bot.totalDropped + result.selfDrop,
+    totalDelivered: bot.totalDelivered + flowResult.delivered,
+    totalDropped: bot.totalDropped + flowResult.drop,
     totalBandwidth: bot.totalBandwidth + bandwidth,
     congestionEvents: bot.congestionEvents + (congestion ? 1 : 0),
     congestionLastTick: congestion,
-    dropTicks: congestion && result.selfDrop > 0
+    dropTicks: congestion && flowResult.drop > 0
       ? [...bot.dropTicks, tick]
       : bot.dropTicks,
     rateSamples,
@@ -312,22 +342,38 @@ function simulateTick(prev, settings, delta) {
   const bw = Math.round(Math.max(5, getBandwidth(settings.scenario, t)));
   const ot = Math.round(Math.max(0, getOtherTraffic(settings.scenario, t)));
 
-  const playerResult = stepQueueModel({
-    selfRate: playerRate,
-    otherArrival: ot,
-    selfQueue: prev.playerQueue,
-    otherQueue: prev.otherQueue,
+  const botCwnds = Object.fromEntries(
+    Object.entries(prev.bots).map(([algorithm, botState]) => [
+      algorithm,
+      Math.round(prepareBotCwnd(botState, t))
+    ])
+  );
+
+  const sharedResult = stepSharedQueueModel({
+    flows: [
+      {
+        id: 'player',
+        arrival: playerRate,
+        queue: prev.playerQueue
+      },
+      ...Object.entries(prev.bots).map(([algorithm, botState]) => ({
+        id: algorithm,
+        arrival: botCwnds[algorithm],
+        queue: botState.queue
+      }))
+    ],
+    backgroundQueue: prev.otherQueue,
+    backgroundArrival: ot,
     bufferSize: settings.bufferSize,
     bandwidth: bw
   });
 
-  const {
-    selfQueue: playerQ,
-    otherQueue: otherQ,
-    selfDrop: pDrop,
-    selfDelivered: pDel,
-    latNorm
-  } = playerResult;
+  const playerFlow = sharedResult.flows.player;
+  const playerQ = playerFlow.queue;
+  const otherQ = sharedResult.backgroundQueue;
+  const pDrop = playerFlow.drop;
+  const pDel = playerFlow.delivered;
+  const { latNorm } = sharedResult;
 
   const pArr = playerRate;
 
@@ -360,11 +406,12 @@ function simulateTick(prev, settings, delta) {
 
   const nextBots = {};
   Object.entries(prev.bots).forEach(([algorithm, botState]) => {
-    nextBots[algorithm] = stepBot(botState, {
+    nextBots[algorithm] = applyBotSharedResult(botState, {
       tick: t,
+      cwnd: botCwnds[algorithm],
+      flowResult: sharedResult.flows[algorithm],
       bandwidth: bw,
-      otherArrival: ot,
-      bufferSize: settings.bufferSize
+      latNorm
     });
   });
 
@@ -409,7 +456,7 @@ function simulateTick(prev, settings, delta) {
       lossRate,
       scoreΔ,
       congestion,
-      queue: playerQ + otherQ,
+      queue: playerQ + otherQ + Object.values(nextBots).reduce((sum, bot) => sum + bot.queue, 0),
       playerRate
     },
     bots: nextBots
