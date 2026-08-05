@@ -10,11 +10,8 @@
   simplified, "spirit of the algorithm" implementations for an educational
   game — not byte-for-byte ports of the real RFCs / Linux kernel code. Cubic
   reuses the real cubic-growth-from-last-reduction shape; BBR reuses the real
-  idea of pacing off an estimated max-bandwidth * min-RTT (bandwidth-delay
-  product), cycling a gain factor to probe for more capacity. Full BBR has
-  multiple state-machine phases (STARTUP/DRAIN/PROBE_BW/PROBE_RTT) with many
-  more edge cases; this is a lightweight approximation of PROBE_BW-style
-  behavior only.
+  idea of pacing off an estimated max-bandwidth, cycling a gain factor to
+  probe for more capacity.
 */
 
 /* ━━━━━━━━━━ CONSTANTS ━━━━━━━━━━ */
@@ -155,22 +152,44 @@ const nextCubicCwnd = (bot, tick) => {
   return clamp(target, MIN_RATE, MAX_RATE);
 };
 
-// BBR: track a rolling max of recently-delivered throughput (a stand-in for
-// "max bandwidth observed") and the minimum observed queueing latency (a
-// stand-in for "min RTT" — this simulation has no separate propagation
-// delay, so normalized queue latency is the closest available proxy).
-// Target rate = gain * (maxBandwidth * minRtt), cycling the gain between
-// 1.25 / 0.75 / 1.0 to periodically probe for more capacity, matching the
-// spirit of BBR's PROBE_BW phase.
-const BBR_BW_WINDOW = 10;
+/*
+  BBR: track a rolling max of the bot's own recent DELIVERED throughput and
+  pace the target off that, cycling a gain factor between 1.25 / 0.75 / 1.0
+  to probe for more capacity, matching the spirit of BBR's PROBE_BW phase.
+  Tracking delivered (not attempted) throughput is deliberate and important:
+  it's what gives BBR real negative feedback from congestion — if sending
+  more just causes drops rather than more delivery, the estimate correctly
+  stops climbing.
+
+  BUG FIX (round 1): the original version multiplied the target by a
+  tracked "minRtt" that was actually sourced from this simulation's
+  normalized QUEUEING latency. Queueing latency legitimately reads near 0
+  whenever the queue is briefly empty (e.g. tick 1, before congestion
+  builds). Once minRtt locked onto a near-zero reading, bdp = maxBandwidth *
+  minRtt collapsed toward 0 permanently — minRtt is a running MINIMUM, so it
+  could only ever get smaller, never recover. Fix: drop the RTT multiplier
+  entirely (this simulation has no real propagation delay to derive one
+  from) — target = gain * maxBandwidth.
+
+  BUG FIX (round 2 — caught by testing round 1's fix before shipping it):
+  round 1 also switched maxBandwidth to sample ATTEMPTED rate (cwnd) instead
+  of delivered throughput, reasoning that delivered is capped by the bot's
+  own already-collapsed cwnd. That fixed the collapse but removed all
+  negative feedback — with nothing but attempted rate feeding the estimate,
+  the gain cycle's 1.25x probe just ratchets upward every cycle regardless
+  of how much congestion it's causing (verified: 61/80 ticks congested,
+  ~50% delivery ratio, growth all the way to the rate cap — clearly wrong).
+  Reverted to tracking delivered throughput, keeping only the round-1 fix
+  (dropping the RTT multiplier).
+*/
+const BBR_RATE_WINDOW = 10;
 const BBR_GAIN_CYCLE = [1.25, 0.75, 1, 1, 1, 1, 1, 1];
 
 const createBbrBotState = (initialRate) => ({
   algorithm: 'bbr',
   cwnd: initialRate,
-  bwSamples: [],
+  rateSamples: [initialRate],
   maxBandwidth: initialRate,
-  minRtt: null,
   cycleIndex: 0,
   queue: 0,
   otherQueue: 0,
@@ -185,11 +204,8 @@ const createBbrBotState = (initialRate) => ({
 });
 
 const nextBbrCwnd = (bot) => {
-  const minRtt = bot.minRtt === null ? 1 : Math.max(bot.minRtt, 0.15);
-  const bdp = bot.maxBandwidth * minRtt;
   const gain = BBR_GAIN_CYCLE[bot.cycleIndex % BBR_GAIN_CYCLE.length];
-
-  return clamp(gain * bdp, MIN_RATE, MAX_RATE);
+  return clamp(gain * bot.maxBandwidth, MIN_RATE, MAX_RATE);
 };
 
 const createBotState = (algorithm, initialRate) =>
@@ -215,10 +231,10 @@ const stepBot = (bot, { tick, bandwidth, otherArrival, bufferSize }) => {
 
   const congestion = result.selfDrop > 0 || result.latNorm > 0.75;
 
-  const bwSamples =
+  const rateSamples =
     bot.algorithm === 'bbr'
-      ? boundedPush(bot.bwSamples, result.selfDelivered, BBR_BW_WINDOW)
-      : bot.bwSamples;
+      ? boundedPush(bot.rateSamples, result.selfDelivered, BBR_RATE_WINDOW)
+      : bot.rateSamples;
 
   return {
     ...bot,
@@ -234,15 +250,9 @@ const stepBot = (bot, { tick, bandwidth, otherArrival, bufferSize }) => {
     dropTicks: congestion && result.selfDrop > 0
       ? [...bot.dropTicks, tick]
       : bot.dropTicks,
-    bwSamples,
+    rateSamples,
     maxBandwidth:
-      bot.algorithm === 'bbr' ? Math.max(...bwSamples, 1) : bot.maxBandwidth,
-    minRtt:
-      bot.algorithm === 'bbr'
-        ? bot.minRtt === null
-          ? result.latNorm
-          : Math.min(bot.minRtt, result.latNorm)
-        : bot.minRtt,
+      bot.algorithm === 'bbr' ? Math.max(...rateSamples, MIN_RATE) : bot.maxBandwidth,
     cycleIndex: bot.algorithm === 'bbr' ? bot.cycleIndex + 1 : bot.cycleIndex,
     histCwnd: boundedPush(bot.histCwnd, Math.round(cwnd), HISTORY_LEN)
   };
